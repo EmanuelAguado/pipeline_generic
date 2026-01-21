@@ -1,10 +1,11 @@
-from maya import cmds
+from maya import cmds # type: ignore
 
 def init_generic():
     print('#######################################################')
     print('############## Project: Generic HIA pipeline ##############')
     print('#######################################################')
     from datetime import datetime
+    from typing import TYPE_CHECKING
     from os import fspath
     from pathlib import Path
     import sys
@@ -15,6 +16,9 @@ def init_generic():
     import inspect
     import os
 
+    if TYPE_CHECKING:
+        import gwaio
+
     print('[gwaio] Importing tools...')
     base_path = Path(os.path.abspath(inspect.getfile(inspect.currentframe()))).parent.parent
     sl_path = fspath(base_path)+"/tools/studio_library/src"
@@ -22,6 +26,7 @@ def init_generic():
 
     sys.path.append(fspath(base_path.parent.parent))
     from dept.layout.procedures import lyt_creation_procedure, lyt_preview_procedure
+    from dept.layout import publisher
 
     publisher_builder_data = {
         "blocking": {
@@ -94,17 +99,21 @@ def init_generic():
             maya_publisher.CollectDescription,
             maya_publisher.CheckRepeatedNameNodes,
             maya_publisher.CheckPastedNodes,
-            maya_publisher.CheckIntermediateShapes,
-            maya_publisher.CheckNotConnectedGroupID,
-            maya_publisher.CheckEnviromentVariables,
-            maya_publisher.CheckUnusedShadingNodes,
-            maya_publisher.CheckImagePlanes,
+            maya_publisher.CheckUnknownNodes,
+            maya_publisher.CheckUnknownPlugins,
             maya_publisher.CheckScriptNodes,
             maya_publisher.CheckMayaFileNamingConvention,
-            maya_publisher.CheckUnusedAnimCurves,
-            maya_publisher.CheckUnweldedVertex,
             maya_publisher.CheckEmptyTransforms,
             maya_publisher.CheckEmptyReferenceNodes,
+            publisher.CheckAssetsNameSpaces,
+            publisher.CheckAudioFile,
+            publisher.CheckResolution,
+            publisher.CheckStartFrame,
+            publisher.CheckDuration,
+            publisher.CheckUnusedReferences,
+            publisher.CheckFPS,
+            publisher.CheckAssetHierarchy,
+            publisher.CheckReferencedAssets,
             maya_publisher.PushSG,
         },
     }

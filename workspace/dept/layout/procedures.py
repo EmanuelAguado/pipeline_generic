@@ -27,13 +27,13 @@ from maya_procedures import (  # type: ignore
 if TYPE_CHECKING:
     import gwaio
 
-VERSION_REGEX = compile("(?<=w|v)\d{3}")
+# gwaio.plugin.schema["version_regex"] = compile("(?<=w|v)\d{3}")
 logger = getLogger(__name__)
 
 
 def lyt_creation_procedure(gwaio):
     logger.info("Layout creation procedure started")
-    output_file = sub(VERSION_REGEX, "001", cmds.file(q=True, sn=True))
+    output_file = sub(gwaio.plugin.schema["version_regex"], "001", cmds.file(q=True, sn=True))
     ok = True
     if Path(output_file).exists():
         ok = (
@@ -48,7 +48,7 @@ def lyt_creation_procedure(gwaio):
         return
 
     logger.info("Find Cam file")
-    camera_path = "C:/Users/emaag/Documents/hia/projects/DEMO_PROJECT/production/publish/templates/cam_master.ma"
+    camera_path = gwaio.plugin.dccs["maya"]["schema"]["camera_file"]
     camera_file = return_file(camera_path, Path(camera_path).parent, "MA Files (*.ma)")
     if camera_file:
         logger.info(f"Cam found: {camera_file}")
@@ -56,7 +56,7 @@ def lyt_creation_procedure(gwaio):
     logger.info("Find audio file")
     audio_path = f"{Path(gwaio.task.server_path).parent}/animatic"
     audio_file = return_file(
-        return_highest_file(VERSION_REGEX, audio_path, ".wav"),
+        return_highest_file(gwaio.plugin.schema["version_regex"], audio_path, ".wav"),
         audio_path,
         "WAV Files (*.wav)",
     )
@@ -75,7 +75,7 @@ def lyt_creation_procedure(gwaio):
 
         asset_path = f"{gwaio.plugin._server_root}/production/publish/assets/{asset_type}/{asset_name}/{asset_variant}/blocking"
         asset_file = return_file(
-            return_highest_file(VERSION_REGEX, asset_path, ".ma"),
+            return_highest_file(gwaio.plugin.schema["version_regex"], asset_path, ".ma"),
             asset_path,
             "MA Files (*.ma)",
         )

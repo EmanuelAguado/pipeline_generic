@@ -10,6 +10,7 @@ from maya import cmds, mel # type: ignore
 from maya.api.OpenMaya import MGlobal # type: ignore
 from PySide6.QtWidgets import QFileDialog # type: ignore
 
+from maya_utils import load_plugins  # type: ignore
 import shotgun_api3 as sg3
 
 VIEWPORT_SHOW_OPTIONS = {
@@ -101,6 +102,104 @@ def create_groups_and_controller(
     
     print(f"Groups and controller created for {obj}.")
     return obj, model_grp, rig_grp, controller
+
+def export_cam(cam_name: str):
+    maya_name = Path(cmds.file(q=True, sn=True))
+    output_path = Path(f"{maya_name.parent}/exports/{maya_name.stem}_{cam_name}_cam.fbx")
+    output_path.parent.mkdir(exist_ok=True)
+    load_plugins(["matrixNodes", "fbxmaya"])
+    mel.eval("FBXExportCameras -v true")
+    mel.eval("FBXProperty Export|IncludeGrp|Animation -v true")
+
+    cmds.rename(cam_name, cam_name + "_temp")
+    export_cam_transform = cmds.camera(n=cam_name)[0]
+    cam_transform = cmds.listRelatives(cam_name + "_tempShape", p=True, f=True)[0]
+    export_cam_transform = cmds.rename(export_cam_transform, cam_name)
+    decompose_matrix_node = cmds.shadingNode("decomposeMatrix", asUtility=True)
+
+    cmds.connectAttr(
+        cam_transform + ".worldMatrix[0]",
+        decompose_matrix_node + ".inputMatrix",
+        force=True,
+    )
+
+    cmds.connectAttr(
+        decompose_matrix_node + ".outputTranslate",
+        export_cam_transform + ".translate",
+        force=True,
+    )
+
+    cmds.connectAttr(
+        decompose_matrix_node + ".outputRotate",
+        export_cam_transform + ".rotate",
+        force=True,
+    )
+
+    cam_shape = cmds.listRelatives(cam_transform, s=True, type="camera", f=True)[0]
+    export_cam_shape = cmds.listRelatives(
+        export_cam_transform, s=True, type="camera", f=True
+    )[0]
+
+    attrs = [
+        ".lensSqueezeRatio",
+        ".focusDistance",
+        ".focalLength",
+        ".fStop",
+        ".centerOfInterest",
+        ".cameraAperture",
+    ]
+
+    for tag in attrs:
+        cmds.connectAttr(cam_shape + tag, export_cam_shape + tag, f=True)
+
+    cmds.bakeResults(
+        export_cam_transform,
+        simulation=True,
+        t=(
+            cmds.playbackOptions(min=True, q=True),
+            cmds.playbackOptions(max=True, q=True),
+        ),
+        sampleBy=1,
+        oversamplingRate=1,
+        disableImplicitControl=True,
+        preserveOutsideKeys=True,
+        sparseAnimCurveBake=False,
+        removeBakedAttributeFromLayer=False,
+        removeBakedAnimFromLayer=False,
+        bakeOnOverrideLayer=False,
+        minimizeRotation=True,
+        controlPoints=False,
+        shape=True,
+    )
+
+    cmds.select(cl=True)
+    cmds.select(export_cam_transform)
+    cmds.delete(decompose_matrix_node)
+    cmds.disconnectAttr(cam_shape + tag, export_cam_shape + tag)
+    for tag in attrs:
+        try:
+            cmds.disconnectAttr(cam_shape + tag, export_cam_shape + tag)
+        except:
+            pass
+
+    cmds.delete(export_cam_transform, constructionHistory=True)
+    cmds.delete(export_cam_shape, constructionHistory=True)
+
+    cmds.file(
+        output_path,
+        f=True,
+        options="v=0;",
+        typ="FBX export",
+        pr=False,
+        es=True,
+        sh=False,
+    )
+    try:
+        cmds.delete(cam_name)
+    except:
+        pass
+
+    cmds.rename(cam_name + "_temp", cam_name)
 
 def image_to_blocking(obj_path,task_id):
     import maya.standalone as alone  # type: ignore
@@ -241,6 +340,11 @@ def return_file(file_path, dir, ext):
         return None
     return file_path
 
+def return_top_refs():
+    for rn in cmds.ls(references=True, l=True):
+        if cmds.referenceQuery(rn, rfn=True, tr=True) == rn:
+            return rn
+
 def return_model_panel():
     """Attempts to return current model panel."""
     model_panels = cmds.getPanel(type="modelPanel")
@@ -270,6 +374,11 @@ def return_panel_visible_items():
     else:
         for k in VIEWPORT_SHOW_OPTIONS.keys():
             yield {k: cmds.modelEditor(model_panel, q=True, **{k: True})}
+
+def return_root_nodes_from_reference(rn: str) -> List[str]:
+    nodes = cmds.ls(cmds.referenceQuery(rn, nodes=True, dp=True), l=True, dag=True)
+    parents = [(cmds.listRelatives(n, p=True, f=True) or ["|"])[0] for n in nodes]
+    return [n for n, p in zip(nodes, parents) if p not in nodes]
 
 def run_playblast(
     start_frame: int,
@@ -420,12 +529,13 @@ def set_renderable_camera(camera_shape: str = "persp"):
     cmds.setAttr(camera_shape + ".renderable", True)
 
 def sg_change_status_task(task_id, status):
-    sg = sg3.Shotgun(
-        SHOTGRID_URL,
-        script_name=SHOTGRID_SCRIPT_NAME,
-        api_key=SHOTGRID_API_KEY,
-    )
-    sg.update("Task", task_id, {"sg_status_list": status})
-    maya_info(f"Status Task {task_id} changed: {status}")
+    ...
+#     sg = sg3.Shotgun(
+#         SHOTGRID_URL,
+#         script_name=SHOTGRID_SCRIPT_NAME,
+#         api_key=SHOTGRID_API_KEY,
+#     )
+#     sg.update("Task", task_id, {"sg_status_list": status})
+#     maya_info(f"Status Task {task_id} changed: {status}")
 
-    sg.close()
+#     sg.close()
