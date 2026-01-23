@@ -1,39 +1,42 @@
 from maya import cmds # type: ignore
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    import gwaio
 
 def init_generic():
     print('#######################################################')
     print('############## Project: Generic HIA pipeline ##############')
     print('#######################################################')
+    import os
+    import inspect
     from datetime import datetime
-    from typing import TYPE_CHECKING
     from os import fspath
     from pathlib import Path
     import sys
-    starting_date = datetime.now()
     from functools import partial
+
     import maya_publisher  # type: ignore
     import maya_procedures  # type: ignore
-    import inspect
-    import os
 
-    if TYPE_CHECKING:
-        import gwaio
-
+    starting_date = datetime.now()
     print('[gwaio] Importing tools...')
     base_path = Path(os.path.abspath(inspect.getfile(inspect.currentframe()))).parent.parent
     sl_path = fspath(base_path)+"/tools/studio_library/src"
     sys.path.append(sl_path)
-
+    
     sys.path.append(fspath(base_path.parent.parent))
     from dept.layout.procedures import lyt_creation_procedure, lyt_preview_procedure
+    from dept.anim.procedures import blk_creation_procedure, blk_preview_procedure
     from dept.layout import publisher
 
     publisher_builder_data = {
-        "blocking": {
+        "modelblocking": [
             maya_publisher.CollectTask,
             maya_publisher.CollectPreview,
             maya_publisher.CollectFile,
             maya_publisher.CollectDescription,
+            maya_publisher.CollectTimelog,
             maya_publisher.CheckRepeatedNameNodes,
             maya_publisher.CheckPastedNodes,
             maya_publisher.CheckIntermediateShapes,
@@ -49,12 +52,14 @@ def init_generic():
             maya_publisher.CheckEmptyTransforms,
             maya_publisher.CheckEmptyReferenceNodes,
             maya_publisher.PushSG,
-        },
-        "model": {
+            maya_publisher.PushTimelog,
+        ],
+        "model": [
             maya_publisher.CollectTask,
             maya_publisher.CollectFile,
             maya_publisher.CollectMov,
             maya_publisher.CollectDescription,
+            maya_publisher.CollectTimelog,
             maya_publisher.CheckRepeatedNameNodes,
             maya_publisher.CheckPastedNodes,
             maya_publisher.CheckIntermediateShapes,
@@ -70,12 +75,14 @@ def init_generic():
             maya_publisher.CheckEmptyTransforms,
             maya_publisher.CheckEmptyReferenceNodes,
             maya_publisher.PushSG,
-        },
-        "uvs": {
+            maya_publisher.PushTimelog,
+        ],
+        "uvs": [
             maya_publisher.CollectTask,
             maya_publisher.CollectFile,
             maya_publisher.CollectMov,
             maya_publisher.CollectDescription,
+            maya_publisher.CollectTimelog,
             maya_publisher.CheckRepeatedNameNodes,
             maya_publisher.CheckPastedNodes,
             maya_publisher.CheckIntermediateShapes,
@@ -91,22 +98,71 @@ def init_generic():
             maya_publisher.CheckEmptyTransforms,
             maya_publisher.CheckEmptyReferenceNodes,
             maya_publisher.PushSG,
-        },
-        "layout": {
+            maya_publisher.PushTimelog,
+        ],
+        "shading": [
             maya_publisher.CollectTask,
+            maya_publisher.CollectFile,
+            maya_publisher.CollectMov,
+            maya_publisher.CollectDescription,
+            maya_publisher.CollectTimelog,
+            maya_publisher.CheckRepeatedNameNodes,
+            maya_publisher.CheckPastedNodes,
+            maya_publisher.CheckIntermediateShapes,
+            maya_publisher.CheckNotConnectedGroupID,
+            maya_publisher.CheckEnviromentVariables,
+            maya_publisher.CheckUnusedShadingNodes,
+            maya_publisher.CheckImagePlanes,
+            maya_publisher.CheckScriptNodes,
+            maya_publisher.CheckMeshesWhichHaveAnimation,
+            maya_publisher.CheckMayaFileNamingConvention,
+            maya_publisher.CheckUnusedAnimCurves,
+            maya_publisher.CheckUnweldedVertex,
+            maya_publisher.CheckEmptyTransforms,
+            maya_publisher.CheckEmptyReferenceNodes,
+            maya_publisher.PushSG,
+            maya_publisher.PushTimelog,
+        ],
+        "rigging": [
+            maya_publisher.CollectTask,
+            maya_publisher.CollectFile,
             maya_publisher.CollectPreview,
-            maya_publisher.CollectFile,
             maya_publisher.CollectDescription,
+            maya_publisher.CollectTimelog,
+            # maya_publisher.CheckRepeatedNameNodes,
+            # maya_publisher.CheckPastedNodes,
+            # maya_publisher.CheckIntermediateShapes,
+            # maya_publisher.CheckNotConnectedGroupID,
+            # maya_publisher.CheckEnviromentVariables,
+            # maya_publisher.CheckUnusedShadingNodes,
+            # maya_publisher.CheckImagePlanes,
+            maya_publisher.CheckScriptNodes,
+            maya_publisher.CheckMeshesWhichHaveAnimation,
+            maya_publisher.CheckMayaFileNamingConvention,
+            maya_publisher.CheckUnusedAnimCurves,
+            # maya_publisher.CheckUnweldedVertex,
+            # maya_publisher.CheckEmptyTransforms,
+            maya_publisher.CheckEmptyReferenceNodes,
+            maya_publisher.PushSG,
+            maya_publisher.PushTimelog,
+        ],
+        "layout": [
+            maya_publisher.CollectTask,
+            maya_publisher.CollectFile,
+            maya_publisher.CollectMov,
+            maya_publisher.CollectDescription,
+            maya_publisher.CollectTimelog,
             maya_publisher.CheckRepeatedNameNodes,
             maya_publisher.CheckPastedNodes,
             maya_publisher.CheckUnknownNodes,
-            maya_publisher.CheckUnknownPlugins,
+            # maya_publisher.CheckUnknownPlugins,
             maya_publisher.CheckScriptNodes,
             maya_publisher.CheckMayaFileNamingConvention,
-            maya_publisher.CheckEmptyTransforms,
             maya_publisher.CheckEmptyReferenceNodes,
+            publisher.CheckEmptyTransforms,
             publisher.CheckAssetsNameSpaces,
-            publisher.CheckAudioFile,
+            # publisher.CheckAudioFile,
+            publisher.ExtractCamera,
             publisher.CheckResolution,
             publisher.CheckStartFrame,
             publisher.CheckDuration,
@@ -115,7 +171,98 @@ def init_generic():
             publisher.CheckAssetHierarchy,
             publisher.CheckReferencedAssets,
             maya_publisher.PushSG,
-        },
+            maya_publisher.PushTimelog,
+        ],
+        "blocking": [
+            maya_publisher.CollectTask,
+            maya_publisher.CollectFile,
+            maya_publisher.CollectMov,
+            maya_publisher.CollectDescription,
+            maya_publisher.CollectTimelog,
+            maya_publisher.CheckRepeatedNameNodes,
+            maya_publisher.CheckPastedNodes,
+            maya_publisher.CheckUnknownNodes,
+            # maya_publisher.CheckUnknownPlugins,
+            maya_publisher.CheckScriptNodes,
+            maya_publisher.CheckMayaFileNamingConvention,
+            maya_publisher.CheckEmptyReferenceNodes,
+            publisher.CheckEmptyTransforms,
+            publisher.CheckAssetsNameSpaces,
+            # publisher.CheckAudioFile,
+            publisher.ExtractCamera,
+            publisher.CheckResolution,
+            publisher.CheckStartFrame,
+            publisher.CheckDuration,
+            publisher.CheckUnusedReferences,
+            publisher.CheckFPS,
+            publisher.CheckAssetHierarchy,
+            publisher.CheckReferencedAssets,
+            maya_publisher.PushSG,
+            maya_publisher.PushTimelog,
+        ],
+        "refine": [
+            maya_publisher.CollectTask,
+            maya_publisher.CollectFile,
+            maya_publisher.CollectMov,
+            maya_publisher.CollectDescription,
+            maya_publisher.CollectTimelog,
+            maya_publisher.CheckRepeatedNameNodes,
+            maya_publisher.CheckPastedNodes,
+            maya_publisher.CheckUnknownNodes,
+            # maya_publisher.CheckUnknownPlugins,
+            maya_publisher.CheckScriptNodes,
+            maya_publisher.CheckMayaFileNamingConvention,
+            maya_publisher.CheckEmptyReferenceNodes,
+            publisher.CheckEmptyTransforms,
+            publisher.CheckAssetsNameSpaces,
+            # publisher.CheckAudioFile,
+            publisher.ExtractCamera,
+            publisher.CheckResolution,
+            publisher.CheckStartFrame,
+            publisher.CheckDuration,
+            publisher.CheckUnusedReferences,
+            publisher.CheckFPS,
+            publisher.CheckAssetHierarchy,
+            publisher.CheckReferencedAssets,
+            maya_publisher.PushSG,
+            maya_publisher.PushTimelog,
+        ],
+        "fix": [
+            maya_publisher.CollectTask,
+            maya_publisher.CollectFile,
+            maya_publisher.CollectMov,
+            maya_publisher.CollectDescription,
+            maya_publisher.CollectTimelog,
+            maya_publisher.CheckRepeatedNameNodes,
+            maya_publisher.CheckPastedNodes,
+            maya_publisher.CheckUnknownNodes,
+            # maya_publisher.CheckUnknownPlugins,
+            maya_publisher.CheckScriptNodes,
+            maya_publisher.CheckMayaFileNamingConvention,
+            maya_publisher.CheckEmptyReferenceNodes,
+            publisher.CheckEmptyTransforms,
+            publisher.CheckAssetsNameSpaces,
+            # publisher.CheckAudioFile,
+            publisher.ExtractCamera,
+            publisher.CheckResolution,
+            publisher.CheckStartFrame,
+            publisher.CheckDuration,
+            publisher.CheckUnusedReferences,
+            publisher.CheckFPS,
+            publisher.CheckAssetHierarchy,
+            publisher.CheckReferencedAssets,
+            maya_publisher.PushSG,
+            maya_publisher.PushTimelog,
+        ],
+        "bake": [
+            maya_publisher.CollectTask,
+            maya_publisher.CollectFile,
+            maya_publisher.CollectMov,
+            maya_publisher.CollectDescription,
+            maya_publisher.CollectTimelog,
+            maya_publisher.PushSG,
+            maya_publisher.PushTimelog,
+        ],
     }
 
 
@@ -133,7 +280,7 @@ def init_generic():
                         "2.- Generate outliner": partial(print,"todo: outline generate"),
                         "3.- Auto rig": partial(maya_procedures.create_groups_and_controller),
                         "4.- Save": partial(maya_procedures.create_groups_and_controller),
-                        "5.- Publish": partial(maya_publisher.main,gwaio,publisher_builder_data["blocking"]),
+                        "5.- Publish": partial(maya_publisher.main,gwaio,publisher_builder_data["modelblocking"]),
                     },
                     "Model": {
                         "1.- Export turntable":partial(new_menu.on_export_turntable_low),
@@ -149,10 +296,10 @@ def init_generic():
                         "publish": partial(maya_publisher.main,gwaio),
                     },
                     "Shading": {
-                        "publish": partial(maya_publisher.main,gwaio),
+                        "publish": partial(maya_publisher.main,gwaio,publisher_builder_data["shading"]),
                     },
                     "Rigging": {
-                        "publish": partial(maya_publisher.main,gwaio),
+                        "publish": partial(maya_publisher.main,gwaio,publisher_builder_data["rigging"]),
                     },
                 },
                 "Shots": {
@@ -165,24 +312,27 @@ def init_generic():
                         "3.- Publish": partial(maya_publisher.main,gwaio,publisher_builder_data["layout"]),
                     },
                     "Blocking": {
-                        "1.- todo": partial(print,"todo: generate"),
-                        "2.- todo": partial(print,"todo: generate"),
+                        "1.- Create base": partial(blk_creation_procedure,gwaio),
+                        "2.- Create preview": {
+                            "720p": partial(blk_preview_procedure,gwaio,[1280,720]),
+                            "1080p": partial(blk_preview_procedure,gwaio,[1920,1080]),
+                        },
                         "3.- Publish": partial(maya_publisher.main,gwaio,publisher_builder_data["blocking"]),
                     },
                     "Refine": {
                         "1.- todo": partial(print,"todo: generate"),
                         "2.- todo": partial(print,"todo: generate"),
-                        "3.- Publish": partial(maya_publisher.main,gwaio,publisher_builder_data["blocking"]),
+                        "3.- Publish": partial(maya_publisher.main,gwaio,publisher_builder_data["refine"]),
                     },
                     "Fixing": {
                         "1.- todo": partial(print,"todo: generate"),
                         "2.- todo": partial(print,"todo: generate"),
-                        "3.- Publish": partial(maya_publisher.main,gwaio,publisher_builder_data["blocking"]),
+                        "3.- Publish": partial(maya_publisher.main,gwaio,publisher_builder_data["fix"]),
                     },
                     "Bake": {
                         "1.- todo": partial(print,"todo: generate"),
                         "2.- todo": partial(print,"todo: generate"),
-                        "3.- Publish": partial(maya_publisher.main,gwaio,publisher_builder_data["blocking"]),
+                        "3.- Publish": partial(maya_publisher.main,gwaio,publisher_builder_data["bake"]),
                     },
                 }
             }

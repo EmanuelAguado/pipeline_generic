@@ -1,6 +1,7 @@
 from logging import getLogger
 from pathlib import Path
 from re import compile, sub
+from shutil import copy2
 from typing import TYPE_CHECKING, List
 from os import fspath
 
@@ -17,6 +18,7 @@ from maya_procedures import (  # type: ignore
     set_hud,
     import_image_plane,
     reference_files,
+    reference_update,
     return_file,
     run_playblast,
     set_mh2_render,
@@ -30,9 +32,11 @@ if TYPE_CHECKING:
 logger = getLogger(__name__)
 
 
-def lyt_creation_procedure(gwaio):
-    logger.info("Layout creation procedure started")
-    output_file = sub(gwaio.plugin.schema["version_regex"], "001", cmds.file(q=True, sn=True))
+def blk_creation_procedure(gwaio):
+    logger.info("First version creation started")
+    output_file = sub(
+        gwaio.plugin.schema["version_regex"], "001", cmds.file(q=True, sn=True)
+    )
     version_regex = compile(gwaio.plugin.schema["version_regex"])
     ok = True
     if Path(output_file).exists():
@@ -47,11 +51,33 @@ def lyt_creation_procedure(gwaio):
     if not ok:
         return
 
-    logger.info("Find Cam file")
-    camera_path = gwaio.plugin.dccs["maya"]["schema"]["camera_file"]
-    camera_file = return_file(camera_path, Path(camera_path).parent, "MA Files (*.ma)")
-    if camera_file:
-        logger.info(f"Cam found: {camera_file}")
+    logger.info("Find previous task file")
+    prev_task_path = gwaio.task.prev_task_server
+    prev_file_path = return_file(
+        return_highest_file(version_regex, prev_task_path, ".ma"),
+        prev_task_path,
+        "MA Files (*.ma)",
+    )
+
+    logger.info(f"The base file will be {prev_file_path}")
+    if prev_file_path is None:
+        return
+    
+    copy2(prev_file_path, output_file)
+    cmds.file(output_file, o=True, f=True)
+
+    if gwaio.task.name == "blocking":
+        logger.info("Find Cam file")
+        cam_file = return_file(
+            Path(f"{gwaio.task.prev_task_server}/dmp_camera.abc").as_posix(),
+            prev_task_path,
+            "ABC Files (*.abc)",
+        )
+        if cam_file:
+            logger.info(f"Cam found: {cam_file}")
+        else:
+            logger.warning("No cam found")
+    # TODO: RENAME CAMERA
 
     logger.info("Find audio file")
     audio_path = f"{Path(gwaio.task.server_path).parent}/animatic"
@@ -63,17 +89,19 @@ def lyt_creation_procedure(gwaio):
     if audio_file:
         logger.info(f"Audio found: {audio_file}")
 
-    logger.info("Find assets file")
+    #remove camera reference
+    import_cam(cam_file)
+    import_audio(audio_file)
+
+    logger.info("Updating the rigs for each maya file")
     assets = gwaio.task.assets.split(",")
-    assets_data = list()
     for asset_code in assets:
         response = gwaio.plugin.async_find(
             "Asset", [["code", "is", asset_code]], ["code", "sg_asset_type"]
         )[0]
         asset_type = response.get("sg_asset_type")
         asset_name, asset_variant = asset_code.split("_")
-
-        asset_path = f"{gwaio.plugin._server_root}/production/publish/assets/{asset_type}/{asset_name}/{asset_variant}/modelBlocking"
+        asset_path = f"{gwaio.plugin._server_root}/production/publish/assets/{asset_type}/{asset_name}/{asset_variant}/rigging"
         asset_file = return_file(
             return_highest_file(version_regex, asset_path, ".ma"),
             asset_path,
@@ -83,37 +111,18 @@ def lyt_creation_procedure(gwaio):
             logger.warning(f"Asset {asset_code} not found, skipping...")
             continue
 
-        asset_ns = Path(asset_file).stem + "_rn0"
-        assets_data.append((asset_file, asset_ns))
-        logger.info(f"Asset will be {asset_file} with namespace {asset_ns}")
+        old_path = f"{gwaio.plugin._server_root}/production/publish/assets/{asset_type}/{asset_name}/{asset_variant}"
+        logger.info(f"Updating asset {asset_code} from {old_path} to {asset_file}")
+        reference_update(old_path, asset_file)
+        logger.info(f"Asset {asset_code} updated successfully")
 
-    logger.info("Find attributes project")
-    input_file = None
-    duration = gwaio.task.cut_duration
-    start_frame = gwaio.plugin.attributes["start_frame"]
-    fps = gwaio.plugin.dccs["maya"]["attributes"]["fps"]
-    resolution = gwaio.plugin.attributes["resolution"]
-    hierarchy_config = gwaio.plugin.dccs["maya"]["hierarchy"]
-    image_plane = gwaio.plugin.dccs["maya"]["image_plane"]
-    render_config = gwaio.plugin.dccs["maya"]["render_config"]
-    color_management = gwaio.plugin.dccs["maya"]["attributes"]["color_management"]
-
-    logger.info("Generate layout file")
-    import_file(input_file)
-    set_time_config(start_frame, duration, fps, resolution)
-    import_audio(audio_file)
-    create_hierarchy_from_dict(hierarchy_config)
-    reference_files(assets_data, hierarchy_config)
-    cam = import_cam(camera_file, hierarchy_config)
-    if image_plane:
-        import_image_plane(cam, image_plane)
-    set_mh2_render(**render_config)
-    set_color_management(color_management)
     save_maya(output_file)
 
-def lyt_preview_procedure(gwaio, resolution: List[int] =[1920, 1080]):
-    logger.info("Layout preview procedure started")
-    
+
+
+def blk_preview_procedure(gwaio, resolution: List[int] = [1920, 1080]):
+    logger.info("Blocking preview procedure started")
+
     logger.info("Find attributes version")
     duration = gwaio.task.cut_duration
     start_frame = gwaio.plugin.attributes["start_frame"]
@@ -151,5 +160,8 @@ def lyt_preview_procedure(gwaio, resolution: List[int] =[1920, 1080]):
     except RuntimeError as e:
         print("Failed to create playblast due to {}".format(str(e)))
 
-def lyt_publish_procedure(gwaio):
-    logger.info("Layout publish procedure started")
+
+def blk_publish_procedure(gwaio):
+    logger.info("Blocking publish procedure started")
+
+    
