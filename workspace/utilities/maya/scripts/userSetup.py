@@ -1,13 +1,14 @@
-from maya import cmds # type: ignore
+from maya import cmds  # type: ignore
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    import gwaio
+    import gwaio # type: ignore
+
 
 def init_generic():
-    print('#######################################################')
-    print('############## Project: Generic HIA pipeline ##############')
-    print('#######################################################')
+    print("#######################################################")
+    print("############## Project: Generic HIA pipeline ##############")
+    print("#######################################################")
     import os
     import inspect
     from datetime import datetime
@@ -18,17 +19,29 @@ def init_generic():
 
     import maya_publisher  # type: ignore
     import maya_procedures  # type: ignore
+    import maya_utils  # type: ignore
 
     starting_date = datetime.now()
-    print('[gwaio] Importing tools...')
-    base_path = Path(os.path.abspath(inspect.getfile(inspect.currentframe()))).parent.parent
-    sl_path = fspath(base_path)+"/tools/studio_library/src"
+    print("[gwaio] Importing tools...")
+    base_path = Path(
+        os.path.abspath(inspect.getfile(inspect.currentframe()))
+    ).parent.parent
+    tools_path = fspath(base_path) + "/tools"
+    sl_path = fspath(tools_path) + "/studio_library/src"
+    sys.path.append(tools_path)
     sys.path.append(sl_path)
-    
+
     sys.path.append(fspath(base_path.parent.parent))
-    from dept.layout.procedures import lyt_creation_procedure, lyt_preview_procedure
-    from dept.anim.procedures import blk_creation_procedure, blk_preview_procedure
-    from dept.layout import publisher
+    from dept.layout.procedures import (
+        lyt_creation_procedure,
+        lyt_export_camera_procedure,
+        lyt_preview_procedure,
+        lyt_import_camera_procedure,
+        lyt_clean_camera_procedure,
+    )
+    from dept.anim.procedures import anim_creation_procedure, anim_preview_procedure
+    from dept.layout import publisher as lyt_publisher
+    from dept.anim import publisher as anim_publisher
 
     publisher_builder_data = {
         "modelblocking": [
@@ -48,7 +61,7 @@ def init_generic():
             maya_publisher.CheckMeshesWhichHaveAnimation,
             maya_publisher.CheckMayaFileNamingConvention,
             maya_publisher.CheckUnusedAnimCurves,
-            maya_publisher.CheckUnweldedVertex,
+            # maya_publisher.CheckUnweldedVertex,
             maya_publisher.CheckEmptyTransforms,
             maya_publisher.CheckEmptyReferenceNodes,
             maya_publisher.PushSG,
@@ -71,7 +84,7 @@ def init_generic():
             maya_publisher.CheckMeshesWhichHaveAnimation,
             maya_publisher.CheckMayaFileNamingConvention,
             maya_publisher.CheckUnusedAnimCurves,
-            maya_publisher.CheckUnweldedVertex,
+            # maya_publisher.CheckUnweldedVertex,
             maya_publisher.CheckEmptyTransforms,
             maya_publisher.CheckEmptyReferenceNodes,
             maya_publisher.PushSG,
@@ -94,7 +107,7 @@ def init_generic():
             maya_publisher.CheckMeshesWhichHaveAnimation,
             maya_publisher.CheckMayaFileNamingConvention,
             maya_publisher.CheckUnusedAnimCurves,
-            maya_publisher.CheckUnweldedVertex,
+            # maya_publisher.CheckUnweldedVertex,
             maya_publisher.CheckEmptyTransforms,
             maya_publisher.CheckEmptyReferenceNodes,
             maya_publisher.PushSG,
@@ -117,7 +130,7 @@ def init_generic():
             maya_publisher.CheckMeshesWhichHaveAnimation,
             maya_publisher.CheckMayaFileNamingConvention,
             maya_publisher.CheckUnusedAnimCurves,
-            maya_publisher.CheckUnweldedVertex,
+            # maya_publisher.CheckUnweldedVertex,
             maya_publisher.CheckEmptyTransforms,
             maya_publisher.CheckEmptyReferenceNodes,
             maya_publisher.PushSG,
@@ -152,24 +165,24 @@ def init_generic():
             maya_publisher.CollectMov,
             maya_publisher.CollectDescription,
             maya_publisher.CollectTimelog,
-            maya_publisher.CheckRepeatedNameNodes,
+            # maya_publisher.CheckRepeatedNameNodes,
             maya_publisher.CheckPastedNodes,
             maya_publisher.CheckUnknownNodes,
             # maya_publisher.CheckUnknownPlugins,
             maya_publisher.CheckScriptNodes,
             maya_publisher.CheckMayaFileNamingConvention,
             maya_publisher.CheckEmptyReferenceNodes,
-            publisher.CheckEmptyTransforms,
-            publisher.CheckAssetsNameSpaces,
-            # publisher.CheckAudioFile,
-            publisher.ExtractCamera,
-            publisher.CheckResolution,
-            publisher.CheckStartFrame,
-            publisher.CheckDuration,
-            publisher.CheckUnusedReferences,
-            publisher.CheckFPS,
-            publisher.CheckAssetHierarchy,
-            publisher.CheckReferencedAssets,
+            lyt_publisher.CheckEmptyTransforms,
+            lyt_publisher.CheckReferencedAssets,
+            lyt_publisher.CheckUnusedReferences,
+            lyt_publisher.CheckAssetsNameSpaces,
+            lyt_publisher.CheckAssetHierarchy,
+            lyt_publisher.CheckAudioFile,
+            lyt_publisher.ExtractCamera,
+            lyt_publisher.CheckResolution,
+            lyt_publisher.CheckStartFrame,
+            lyt_publisher.CheckDuration,
+            lyt_publisher.CheckFPS,
             maya_publisher.PushSG,
             maya_publisher.PushTimelog,
         ],
@@ -179,24 +192,23 @@ def init_generic():
             maya_publisher.CollectMov,
             maya_publisher.CollectDescription,
             maya_publisher.CollectTimelog,
-            maya_publisher.CheckRepeatedNameNodes,
+            # maya_publisher.CheckRepeatedNameNodes,
             maya_publisher.CheckPastedNodes,
             maya_publisher.CheckUnknownNodes,
             # maya_publisher.CheckUnknownPlugins,
             maya_publisher.CheckScriptNodes,
             maya_publisher.CheckMayaFileNamingConvention,
             maya_publisher.CheckEmptyReferenceNodes,
-            publisher.CheckEmptyTransforms,
-            publisher.CheckAssetsNameSpaces,
-            # publisher.CheckAudioFile,
-            publisher.ExtractCamera,
-            publisher.CheckResolution,
-            publisher.CheckStartFrame,
-            publisher.CheckDuration,
-            publisher.CheckUnusedReferences,
-            publisher.CheckFPS,
-            publisher.CheckAssetHierarchy,
-            publisher.CheckReferencedAssets,
+            lyt_publisher.CheckEmptyTransforms,
+            anim_publisher.CheckReferencedAssets,
+            lyt_publisher.CheckUnusedReferences,
+            lyt_publisher.CheckAssetsNameSpaces,
+            lyt_publisher.CheckAssetHierarchy,
+            lyt_publisher.CheckAudioFile,
+            lyt_publisher.CheckResolution,
+            lyt_publisher.CheckStartFrame,
+            lyt_publisher.CheckDuration,
+            lyt_publisher.CheckFPS,
             maya_publisher.PushSG,
             maya_publisher.PushTimelog,
         ],
@@ -206,24 +218,23 @@ def init_generic():
             maya_publisher.CollectMov,
             maya_publisher.CollectDescription,
             maya_publisher.CollectTimelog,
-            maya_publisher.CheckRepeatedNameNodes,
+            # maya_publisher.CheckRepeatedNameNodes,
             maya_publisher.CheckPastedNodes,
             maya_publisher.CheckUnknownNodes,
             # maya_publisher.CheckUnknownPlugins,
             maya_publisher.CheckScriptNodes,
             maya_publisher.CheckMayaFileNamingConvention,
             maya_publisher.CheckEmptyReferenceNodes,
-            publisher.CheckEmptyTransforms,
-            publisher.CheckAssetsNameSpaces,
-            # publisher.CheckAudioFile,
-            publisher.ExtractCamera,
-            publisher.CheckResolution,
-            publisher.CheckStartFrame,
-            publisher.CheckDuration,
-            publisher.CheckUnusedReferences,
-            publisher.CheckFPS,
-            publisher.CheckAssetHierarchy,
-            publisher.CheckReferencedAssets,
+            lyt_publisher.CheckEmptyTransforms,
+            anim_publisher.CheckReferencedAssets,
+            lyt_publisher.CheckUnusedReferences,
+            lyt_publisher.CheckAssetsNameSpaces,
+            lyt_publisher.CheckAssetHierarchy,
+            lyt_publisher.CheckAudioFile,
+            lyt_publisher.CheckResolution,
+            lyt_publisher.CheckStartFrame,
+            lyt_publisher.CheckDuration,
+            lyt_publisher.CheckFPS,
             maya_publisher.PushSG,
             maya_publisher.PushTimelog,
         ],
@@ -233,24 +244,23 @@ def init_generic():
             maya_publisher.CollectMov,
             maya_publisher.CollectDescription,
             maya_publisher.CollectTimelog,
-            maya_publisher.CheckRepeatedNameNodes,
+            # maya_publisher.CheckRepeatedNameNodes,
             maya_publisher.CheckPastedNodes,
             maya_publisher.CheckUnknownNodes,
             # maya_publisher.CheckUnknownPlugins,
             maya_publisher.CheckScriptNodes,
             maya_publisher.CheckMayaFileNamingConvention,
             maya_publisher.CheckEmptyReferenceNodes,
-            publisher.CheckEmptyTransforms,
-            publisher.CheckAssetsNameSpaces,
-            # publisher.CheckAudioFile,
-            publisher.ExtractCamera,
-            publisher.CheckResolution,
-            publisher.CheckStartFrame,
-            publisher.CheckDuration,
-            publisher.CheckUnusedReferences,
-            publisher.CheckFPS,
-            publisher.CheckAssetHierarchy,
-            publisher.CheckReferencedAssets,
+            lyt_publisher.CheckEmptyTransforms,
+            anim_publisher.CheckReferencedAssets,
+            lyt_publisher.CheckUnusedReferences,
+            lyt_publisher.CheckAssetsNameSpaces,
+            lyt_publisher.CheckAssetHierarchy,
+            lyt_publisher.CheckAudioFile,
+            lyt_publisher.CheckResolution,
+            lyt_publisher.CheckStartFrame,
+            lyt_publisher.CheckDuration,
+            lyt_publisher.CheckFPS,
             maya_publisher.PushSG,
             maya_publisher.PushTimelog,
         ],
@@ -265,87 +275,161 @@ def init_generic():
         ],
     }
 
-
     # añadir los check desde la libreria de publisher y no la de utilities.maya
     def add_gwaio_menu():
         """You need to wrap the method around a partial call"""
 
-        try:        
+        try:
             new_menu = gwaio.menu
             task = gwaio.task
             menu_cfg = {
                 "Assets": {
                     "Blocking": {
                         "1.- Import reference": partial(maya_procedures.import_obj),
-                        "2.- Generate outliner": partial(print,"todo: outline generate"),
-                        "3.- Auto rig": partial(maya_procedures.create_groups_and_controller),
-                        "4.- Save": partial(maya_procedures.create_groups_and_controller),
-                        "5.- Publish": partial(maya_publisher.main,gwaio,publisher_builder_data["modelblocking"]),
+                        "2.- Generate outliner": partial(
+                            print, "todo: outline generate"
+                        ),
+                        "3.- Auto rig": partial(
+                            maya_procedures.create_groups_and_controller
+                        ),
+                        "4.- Save": partial(
+                            maya_procedures.create_groups_and_controller
+                        ),
+                        "5.- Publish": partial(
+                            maya_publisher.main,
+                            gwaio,
+                            publisher_builder_data["modelblocking"],
+                        ),
                     },
                     "Model": {
-                        "1.- Export turntable":partial(new_menu.on_export_turntable_low),
-                        "2.- Auto rig":partial(maya_procedures.create_groups_and_controller),
-                        "3.- Save": partial(print,"todo: save"),
-                        "3.- Publish": partial(maya_publisher.main,gwaio,publisher_builder_data["model"]),
+                        "1.- Export turntable": partial(
+                            new_menu.on_export_turntable_low
+                        ),
+                        "2.- Auto rig": partial(
+                            maya_procedures.create_groups_and_controller
+                        ),
+                        "3.- Save": partial(print, "todo: save"),
+                        "3.- Publish": partial(
+                            maya_publisher.main, gwaio, publisher_builder_data["model"]
+                        ),
                     },
                     "UVs": {
-                        "1.- Assign checker mat":partial(print,"todo: Assign checker mat"),
-                        "2.- Export turntable":partial(new_menu.on_export_turntable_low),
-                        "3.- Clear checker mat":partial(print,"todo: Clear checker mat"),
-                        "4.- Publish": partial(maya_publisher.main,gwaio,publisher_builder_data["uvs"]),
-                        "publish": partial(maya_publisher.main,gwaio),
+                        "1.- Assign checker mat": partial(
+                            print, "todo: Assign checker mat"
+                        ),
+                        "2.- Export turntable": partial(
+                            new_menu.on_export_turntable_low
+                        ),
+                        "3.- Clear checker mat": partial(
+                            print, "todo: Clear checker mat"
+                        ),
+                        "4.- Publish": partial(
+                            maya_publisher.main, gwaio, publisher_builder_data["uvs"]
+                        ),
+                        "publish": partial(maya_publisher.main, gwaio),
                     },
                     "Shading": {
-                        "publish": partial(maya_publisher.main,gwaio,publisher_builder_data["shading"]),
+                        "publish": partial(
+                            maya_publisher.main,
+                            gwaio,
+                            publisher_builder_data["shading"],
+                        ),
                     },
                     "Rigging": {
-                        "publish": partial(maya_publisher.main,gwaio,publisher_builder_data["rigging"]),
+                        "publish": partial(
+                            maya_publisher.main,
+                            gwaio,
+                            publisher_builder_data["rigging"],
+                        ),
                     },
                 },
                 "Shots": {
                     "Layout": {
-                        "1.- Create base": partial(lyt_creation_procedure,gwaio),
-                        "2.- Create preview": {
-                            "720p": partial(lyt_preview_procedure,gwaio,[1280,720]),
-                            "1080p": partial(lyt_preview_procedure,gwaio,[1920,1080]),
+                        "1.- Create base": partial(lyt_creation_procedure, gwaio),
+                        "2.- Test Bake camera": {
+                            "Export bake camera": partial(
+                                lyt_export_camera_procedure, gwaio
+                            ),
+                            "Import bake camera": partial(
+                                lyt_import_camera_procedure, gwaio
+                            ),
+                            "Clean bake camera": partial(
+                                lyt_clean_camera_procedure, gwaio
+                            ),
                         },
-                        "3.- Publish": partial(maya_publisher.main,gwaio,publisher_builder_data["layout"]),
+                        "3.- Create preview": {
+                            "720p": partial(lyt_preview_procedure, gwaio, [1280, 720]),
+                            "1080p": partial(
+                                lyt_preview_procedure, gwaio, [1920, 1080]
+                            ),
+                        },
+                        "4.- Publish": partial(
+                            maya_publisher.main, gwaio, publisher_builder_data["layout"]
+                        ),
                     },
                     "Blocking": {
-                        "1.- Create base": partial(blk_creation_procedure,gwaio),
+                        "1.- Create base": partial(anim_creation_procedure, gwaio),
                         "2.- Create preview": {
-                            "720p": partial(blk_preview_procedure,gwaio,[1280,720]),
-                            "1080p": partial(blk_preview_procedure,gwaio,[1920,1080]),
+                            "720p": partial(anim_preview_procedure, gwaio, [1280, 720]),
+                            "1080p": partial(
+                                anim_preview_procedure, gwaio, [1920, 1080]
+                            ),
                         },
-                        "3.- Publish": partial(maya_publisher.main,gwaio,publisher_builder_data["blocking"]),
+                        "3.- Publish": partial(
+                            maya_publisher.main,
+                            gwaio,
+                            publisher_builder_data["blocking"],
+                        ),
                     },
                     "Refine": {
-                        "1.- todo": partial(print,"todo: generate"),
-                        "2.- todo": partial(print,"todo: generate"),
-                        "3.- Publish": partial(maya_publisher.main,gwaio,publisher_builder_data["refine"]),
+                        "1.- Create base": partial(anim_creation_procedure, gwaio),
+                        "2.- Create preview": {
+                            "720p": partial(anim_preview_procedure, gwaio, [1280, 720]),
+                            "1080p": partial(
+                                anim_preview_procedure, gwaio, [1920, 1080]
+                            ),
+                        },
+                        "3.- Publish": partial(
+                            maya_publisher.main,
+                            gwaio,
+                            publisher_builder_data["refine"],
+                        ),
                     },
                     "Fixing": {
-                        "1.- todo": partial(print,"todo: generate"),
-                        "2.- todo": partial(print,"todo: generate"),
-                        "3.- Publish": partial(maya_publisher.main,gwaio,publisher_builder_data["fix"]),
+                        "1.- Create base": partial(anim_creation_procedure, gwaio),
+                        "2.- Create preview": {
+                            "720p": partial(anim_preview_procedure, gwaio, [1280, 720]),
+                            "1080p": partial(
+                                anim_preview_procedure, gwaio, [1920, 1080]
+                            ),
+                        },
+                        "3.- Publish": partial(
+                            maya_publisher.main,
+                            gwaio,
+                            publisher_builder_data["fix"],
+                        ),
                     },
                     "Bake": {
-                        "1.- todo": partial(print,"todo: generate"),
-                        "2.- todo": partial(print,"todo: generate"),
-                        "3.- Publish": partial(maya_publisher.main,gwaio,publisher_builder_data["bake"]),
+                        "1.- todo": partial(print, "todo: generate"),
+                        "2.- todo": partial(print, "todo: generate"),
+                        "3.- Publish": partial(
+                            maya_publisher.main, gwaio, publisher_builder_data["bake"]
+                        ),
                     },
-                }
+                },
             }
-            new_menu.create_gwaio_menu(menu_cfg,new_menu.gwaio_menu)
+            new_menu.create_gwaio_menu(menu_cfg, new_menu.gwaio_menu)
         except Exception as e:
             print(e)
 
     add_gwaio_menu()
-    finishing_date = datetime.now();print(f'userSetup loading time was: {finishing_date-starting_date}')
+    finishing_date = datetime.now()
+    print(f"userSetup loading time was: {finishing_date-starting_date}")
 
     # except:
     #     error = traceback.format_exc()
     #     cmds.evalDeferred(f'print(r"[gwaio] error : {error}")')
+
 
 cmds.evalDeferred("print('[gwaio generic project] starting')", lp=True)
 cmds.evalDeferred("init_generic()", lp=True)

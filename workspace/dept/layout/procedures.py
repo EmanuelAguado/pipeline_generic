@@ -8,13 +8,15 @@ from PySide6.QtWidgets import QMessageBox  # type: ignore
 from maya import cmds  # type: ignore
 
 from pipe_utils import return_highest_file  # type: ignore
+import resolver_utils  # type: ignore
 from maya_procedures import (  # type: ignore
     import_file,
     import_audio,
     import_cam,
+    is_correct_task,
+    export_cam,
     create_hierarchy_from_dict,
     set_color_management,
-    set_hud,
     import_image_plane,
     reference_files,
     return_file,
@@ -25,14 +27,16 @@ from maya_procedures import (  # type: ignore
 )
 
 if TYPE_CHECKING:
-    import gwaio
+    import gwaio  # type: ignore
 
 logger = getLogger(__name__)
 
-
+@is_correct_task("layout")
 def lyt_creation_procedure(gwaio):
     logger.info("Layout creation procedure started")
-    output_file = sub(gwaio.plugin.schema["version_regex"], "001", cmds.file(q=True, sn=True))
+    output_file = sub(
+        gwaio.plugin.schema["version_regex"], "001", cmds.file(q=True, sn=True)
+    )
     version_regex = compile(gwaio.plugin.schema["version_regex"])
     ok = True
     if Path(output_file).exists():
@@ -60,6 +64,9 @@ def lyt_creation_procedure(gwaio):
         audio_path,
         "WAV Files (*.wav)",
     )
+    audio_node_name = resolver_utils.resolve(
+        gwaio.plugin.dccs["maya"]["schema"]["audio_name_schema"], gwaio.task.__dict__
+    )
     if audio_file:
         logger.info(f"Audio found: {audio_file}")
 
@@ -67,13 +74,24 @@ def lyt_creation_procedure(gwaio):
     assets = gwaio.task.assets.split(",")
     assets_data = list()
     for asset_code in assets:
-        response = gwaio.plugin.async_find(
+        ctx = gwaio.plugin.async_find(
             "Asset", [["code", "is", asset_code]], ["code", "sg_asset_type"]
         )[0]
-        asset_type = response.get("sg_asset_type")
+        # asset_type = ctx.get("sg_asset_type")
         asset_name, asset_variant = asset_code.split("_")
-
-        asset_path = f"{gwaio.plugin._server_root}/production/publish/assets/{asset_type}/{asset_name}/{asset_variant}/modelBlocking"
+        ctx.update(
+            {
+                "root": gwaio.plugin._server_root,
+                "asset_name": asset_name,
+                "variant_name": asset_variant,
+                "task_name": "modelBlocking",
+            }
+        )
+        # asset_path = f"{gwaio.plugin._server_root}/production/publish/assets/{asset_type}/{asset_name}/{asset_variant}/modelBlocking"
+        asset_path = resolver_utils.resolve(
+            gwaio.plugin.dccs["maya"]["schema"]["asset_path_schema"],
+            ctx,
+        )
         asset_file = return_file(
             return_highest_file(version_regex, asset_path, ".ma"),
             asset_path,
@@ -99,10 +117,15 @@ def lyt_creation_procedure(gwaio):
     color_management = gwaio.plugin.dccs["maya"]["attributes"]["color_management"]
 
     logger.info("Generate layout file")
+    logger.debug(f"Import template file: {input_file}")
     import_file(input_file)
+    logger.debug(f"Setting time config: {start_frame}, {duration}, {fps}, {resolution}")
     set_time_config(start_frame, duration, fps, resolution)
-    import_audio(audio_file)
+    logger.debug(f"Importing audio file: {audio_file} | node name: {audio_node_name}")
+    import_audio(audio_file, audio_node_name)
+    logger.debug(f"Creating hierarchy: {hierarchy_config}")
     create_hierarchy_from_dict(hierarchy_config)
+    logger.debug("reference files:")
     reference_files(assets_data, hierarchy_config)
     cam = import_cam(camera_file, hierarchy_config)
     if image_plane:
@@ -111,18 +134,28 @@ def lyt_creation_procedure(gwaio):
     set_color_management(color_management)
     save_maya(output_file)
 
-def lyt_preview_procedure(gwaio, resolution: List[int] =[1920, 1080]):
+
+@is_correct_task("layout")
+def lyt_preview_procedure(gwaio, resolution: List[int] = [1920, 1080]):
     logger.info("Layout preview procedure started")
-    
     logger.info("Find attributes version")
     duration = gwaio.task.cut_duration
     start_frame = gwaio.plugin.attributes["start_frame"]
     fps = gwaio.plugin.dccs["maya"]["attributes"]["fps"]
     resolution = resolution or gwaio.plugin.attributes["resolution"]
     playblast_cfg = gwaio.plugin.dccs["maya"]["playblast_config"]
+    playblast_viewport_cfg = gwaio.plugin.dccs["maya"]["playblast_viewport_config"]
+    playblast_camera_cfg = gwaio.plugin.dccs["maya"]["playblast_camera_config"]
     render_config = gwaio.plugin.dccs["maya"]["render_config"]
     color_management = gwaio.plugin.dccs["maya"]["attributes"]["color_management"]
-    cam = "cam_master:cam_master"
+    if gwaio.task.name == "layout":
+        cam = "cam_master:cam_master"
+    else:
+        cam = resolver_utils.resolve(
+            gwaio.plugin.dccs["maya"]["schema"]["camera_name_schema"],
+            gwaio.task.__dict__,
+        )
+
     maya_file = Path(cmds.file(q=True, sn=True))
     output_path = maya_file.parent
     output_file = output_path / maya_file.stem
@@ -146,10 +179,40 @@ def lyt_preview_procedure(gwaio, resolution: List[int] =[1920, 1080]):
             **playblast_config,
             visible_huds=[],
             visible_objs=["polymeshes", "hos", "hud"],
+            playblast_viewport_cfg=playblast_viewport_cfg,
+            playblast_camera_cfg=playblast_camera_cfg,
             resolution=resolution,
         )
     except RuntimeError as e:
         print("Failed to create playblast due to {}".format(str(e)))
 
-def lyt_publish_procedure(gwaio):
-    logger.info("Layout publish procedure started")
+
+@is_correct_task("layout")
+def lyt_export_camera_procedure(gwaio):
+    logger.info("Layout export camera procedure started")
+    maya_publish_path = gwaio.plugin.work_to_publish(gwaio.task.serialize())[1]
+    cam_name = "|cam|cam_master:CAM_MASTER|cam_master:cam_master"
+    cam_out_name = resolver_utils.resolve(
+        gwaio.plugin.dccs["maya"]["schema"]["camera_name_schema"], gwaio.task.__dict__
+    )
+    cam_output_file = Path(f"{maya_publish_path}/dmp_camera.abc")
+    export_cam(
+        cam_input_name=cam_name,
+        cam_output_name=cam_out_name,
+        output_file=cam_output_file,
+        cam_grp="bcam",
+    )
+
+
+@is_correct_task("layout")
+def lyt_import_camera_procedure(gwaio):
+    logger.info("Layout import camera procedure started")
+    maya_publish_path = gwaio.plugin.work_to_publish(gwaio.task.serialize())[1]
+    cam_output_file = Path(f"{maya_publish_path}/dmp_camera.abc")
+    import_cam(cam_output_file)
+
+
+@is_correct_task("layout")
+def lyt_clean_camera_procedure(gwaio):
+    logger.info("Layout clean camera procedure started")
+    cmds.delete("|bcam")

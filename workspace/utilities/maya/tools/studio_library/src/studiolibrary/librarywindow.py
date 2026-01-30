@@ -341,16 +341,16 @@ class LibraryWindow(QtWidgets.QWidget):
         # Setup Layout
         # -------------------------------------------------------------------
 
-        layout = QtWidgets.QVBoxLayout(self)
+        layout = QtWidgets.QVBoxLayout()
         layout.setSpacing(0)
         layout.setContentsMargins(0, 0, 0, 0)
         self.setLayout(layout)
 
-        layout = QtWidgets.QVBoxLayout(self)
+        layout = QtWidgets.QVBoxLayout()
         layout.setContentsMargins(0, 1, 0, 0)
         self._previewFrame.setLayout(layout)
 
-        layout = QtWidgets.QVBoxLayout(self)
+        layout = QtWidgets.QVBoxLayout()
         layout.setContentsMargins(0, 1, 0, 0)
 
         self._sidebarFrame.setLayout(layout)
@@ -1513,6 +1513,11 @@ class LibraryWindow(QtWidgets.QWidget):
 
         # Check if the items are moving to another folder.
         for item in items:
+
+            if item.isVersionPath():
+                raise NameError("You can only save items that were "
+                                "created using Studio Library version 2!")
+
             if os.path.dirname(item.path()) == dst:
                 return
 

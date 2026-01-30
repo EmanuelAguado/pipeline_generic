@@ -1,0 +1,40 @@
+Shape Animation Tool 2.0
+
+Tool using PySide, it integraded in Maya from 2014 version, becouse main request is Maya 2014.
+On more oldest Maya Flex will be working, but then you need to install PySide manually.
+
+Also tool can use free plugin ShapesBrush for easy sculpting, which you can download from link - http://www.braverabbit.com/shapesbrush/ and install it.
+But without it will be work also. In maya 2017 you can use sculpt tool for easy editting mesh.
+
+
+Installing:
+1. Drop folder sat in your scripts folder:
+My path is - C:\Users\UserName\Documents\maya\2014-x64\scripts 
+2. Copy shelf_sat.mel in the shelves folder
+My path is - C:\Users\UserName\Documents\maya\2014-x64\prefs\shelves
+
+
+
+
+History:
+
+1.0 - First Release
+
+1.0.1 - Updated for using with Shapes Brush 1.6
+
+1.0.2 - Added compatibility with older versions of Shapes Brush
+
+1.0.3 - Fixed possible bug with error "Non-ASCII character..".
+
+1.1   -	Now Tool can be installed without ShapesBrush plugin
+      -	Redesigned buttons for editting, add button for using Artisan tool
+      - Fixed some behaviour on switching edit modes
+
+1.2   - Updated for using with Shapes Brush 1.8 
+      - Updated for using in Maya 2017
+
+2.0   - Redesigned interface.
+      - Add layers. You can use many correct layers on one mesh.
+      - Add Pick Tool. You can add mesh to list, clicking on it. Even if mesh is not selectable.
+      - Fixed some small bugs.
+      - Add some small features.

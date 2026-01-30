@@ -4,7 +4,7 @@ from logging import getLogger
 from os import fspath
 from pathlib import Path
 import shutil
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Union
 
 logger = getLogger(__name__)
 
@@ -14,12 +14,6 @@ from PySide6.QtWidgets import QFileDialog  # type: ignore
 
 from maya_utils import load_plugins  # type: ignore
 import shotgun_api3 as sg3
-
-VIEWPORT_SHOW_OPTIONS = {
-    "hos": True,
-    "hud": True,
-    "polymeshes": True,
-}
 
 
 # Maya logging functions
@@ -115,7 +109,12 @@ def create_groups_and_controller(
     return obj, model_grp, rig_grp, controller
 
 
-def export_cam(cam_name: str, output_file: Union[str, Path]):
+def export_cam(
+    cam_input_name: str,
+    cam_output_name: str,
+    output_file: Union[str, Path],
+    cam_grp: str = "",
+):
     cam_attrs = [
         "depthOfField",
         "focalLength",
@@ -131,34 +130,35 @@ def export_cam(cam_name: str, output_file: Union[str, Path]):
         "overscan",
     ]
 
-    def create_bake_camera(camera_name, cam_grp):
+    def create_bake_camera(camera_name, cam_out_name, cam_grp):
         if not cmds.objExists(cam_grp):
             cmds.createNode("transform", name=cam_grp)
             for attr in ["translate", "rotate", "scale", "visibility"]:
                 cmds.setAttr(cam_grp + "." + attr, lock=True)
-
-        cam_transform = camera_name
-        cam_shape = cmds.listRelatives(cam_transform, shapes=True, fullPath=True)[0]
+        cam_to_bake = camera_name
+        cam_to_bake_shape = cmds.listRelatives(cam_to_bake, shapes=True, fullPath=True)[
+            0
+        ]
 
         # BAKE CAMERA CREATED HERE
-        baked_name = cam_transform + "_baked"
-        if cmds.objExists(baked_name):
-            print(f'Baked camera "{baked_name}" already exists. Overwriting...')
-            cmds.delete(baked_name)
+        bake_cam_name = cam_out_name
+        if cmds.objExists(bake_cam_name):
+            print(f'Baked camera "{bake_cam_name}" already exists. Overwriting...')
+            cmds.delete(bake_cam_name)
 
-        baked_transform = cmds.createNode(
-            "transform", parent=cam_grp, name=cam_transform + "_baked"
+        bake_cam_transform = cmds.createNode(
+            "transform", parent=cam_grp, name=bake_cam_name
         )
-        baked_shape = cmds.createNode(
-            "camera", parent=baked_transform, name=cam_transform + "_bakedShape"
+        bake_cam_shape = cmds.createNode(
+            "camera", parent=bake_cam_transform, name=bake_cam_name + "Shape"
         )
-        cmds.parentConstraint(cam_transform, baked_transform)
-        cmds.scaleConstraint(cam_transform, baked_transform)
+        cmds.parentConstraint(cam_to_bake, bake_cam_transform)
+        cmds.scaleConstraint(cam_to_bake, bake_cam_transform)
         for a in cam_attrs:
-            cmds.setAttr(f"{baked_shape}.{a}", k=True)
-            cmds.connectAttr(f"{cam_shape}.{a}", f"{baked_shape}.{a}")
+            cmds.setAttr(f"{bake_cam_shape}.{a}", k=True)
+            cmds.connectAttr(f"{cam_to_bake_shape}.{a}", f"{bake_cam_shape}.{a}")
 
-        return baked_transform, baked_shape
+        return bake_cam_transform, bake_cam_shape
 
     def bake_camera(cam_transform):
         start_frame = cmds.playbackOptions(q=True, min=True)
@@ -206,8 +206,7 @@ def export_cam(cam_name: str, output_file: Union[str, Path]):
             shutil.rmtree(workspace / "cache")
 
     Path(output_file).parent.mkdir(exist_ok=True)
-    cam_grp = "cam_bake"
-    cam_transform, _ = create_bake_camera(cam_name, cam_grp)
+    cam_transform, _ = create_bake_camera(cam_input_name, cam_output_name, cam_grp)
     bake_camera(cam_transform)
     export_camera(cam_grp, output_file.as_posix())
     cleanup(cam_grp)
@@ -261,8 +260,7 @@ def import_cam(cam_file: str, config: Dict[str, str] = None):
         if not cmds.pluginInfo("AbcImport", q=True, l=True):
             cmds.loadPlugin("AbcImport.mll")
         abc_cam = cmds.AbcImport(fspath(cam_file), mode="import", fitTimeRange=True)
-        cam_transform = return_alembic_nodes(abc_cam,"transform")
-        print("???",cam_transform)
+        cam_transform = return_alembic_nodes(abc_cam, "transform")
         set_renderable_camera(cam_transform[0])
         return cam_transform
 
@@ -306,6 +304,18 @@ def import_obj(output_obj_path: str) -> Optional[str]:
     return renamed_obj_name
 
 
+def is_correct_task(*task_name):
+    def decorator(f):
+        def check(*args, **kwargs):
+            current_task = args[0].task.name
+            if current_task not in task_name:
+                logger.error(f"Expected task '{task_name}' but current task is '{current_task}'")
+                return
+            return f(*args, **kwargs)
+        return check
+    return decorator
+
+
 def reference_files(objects: List[str], config: Dict[str, str]):
     for asset in objects:
         path, ns = asset
@@ -319,6 +329,7 @@ def reference_file(
     file: Union[str, Path], namespace: Union[str, None], parent: Union[str, None] = None
 ):
     try:
+        logger.debug(f"referencing files: {file} with ns: {namespace} and parent: {parent}")
         namespace = namespace or Path(file).stem
         ref = cmds.file(fspath(file), r=True, namespace=namespace, force=True)
         nodes = cmds.referenceQuery(ref, nodes=True, dp=True)
@@ -330,6 +341,7 @@ def reference_file(
         cmds.lockNode(new_ref_node, l=True)
         if parent is not None:
             cmds.parent(nodes[0], parent)
+        logger.debug(f"Referenced file successfully: {file} as {new_ref_node} with namespace: {namespace}")
         return ref, nodes
     except Exception as e:
         logger.warning(str(e))
@@ -380,12 +392,18 @@ def reference_update(old_path, asset_file):
         asset_ns = Path(asset_file).stem + f"_rn{rn_version}"
         # asset_ns = Path(asset_file_).stem + "_rn0"
         asset_ns = validate_namespace(asset_ns)
+        if Path(old_file).as_posix() == Path(asset_file).as_posix():
+            logger.info(f"Asset {asset_ns} is already up to date, skipping...")
+            continue
         if Path(old_path) in Path(old_file).parents:
             reference_replace(asset_file, rn, asset_ns)
 
 
 def return_alembic_nodes(alembic_node: str, node_type: str):
-    cams = cmds.ls(cmds.listConnections(alembic_node,fnn=True), type=node_type,l=True) or []
+    cams = (
+        cmds.ls(cmds.listConnections(alembic_node, fnn=True), type=node_type, l=True)
+        or []
+    )
     return cams
 
 
@@ -405,6 +423,22 @@ def return_asset_parent(node, assemblies_config: Dict[str, str]):
                     logger.warning(f"There is not a node called {parent}")
                     raise (e)
         i += 1
+
+
+def return_camera_settings(camera: str, settings: Optional[List[str]] = None):
+    if settings is None:
+        settings = [
+            "displayFilmOrigin",
+            "displayFilmPivot",
+            "displaySafeTitle",
+            "displaySafeAction",
+            "displayFieldChart",
+        ]
+    cam_cfg = {}
+    for setting in settings:
+        cam_cfg[setting] = cmds.getAttr(f"{camera}.{setting}")
+    return cam_cfg
+
 
 
 def return_config_viewport(**kwargs):
@@ -445,10 +479,12 @@ def return_references_top():
             return rn
 
 
-def return_reference_file_and_ns(top_refs=False):
+def return_reference_file_and_ns(top_refs=False,rn=None):
     l = cmds.ls(references=True, l=True)
     if top_refs:
         l = [r for r in deepcopy(l) if cmds.referenceQuery(r, rfn=True, tr=True) == r]
+    if rn:
+        l = [rn]
     for rn in l:
         file = cmds.referenceQuery(rn, f=True, wcn=True)
         # list nodes
@@ -486,12 +522,12 @@ def return_model_panel():
     return current_panel
 
 
-def return_panel_visible_items():
+def return_panel_visible_items(playblast_viewport_cfg=None):
     model_panel = return_model_panel()
     if model_panel is None:
         yield dict()
     else:
-        for k in VIEWPORT_SHOW_OPTIONS.keys():
+        for k in playblast_viewport_cfg.keys():
             yield {k: cmds.modelEditor(model_panel, q=True, **{k: True})}
 
 
@@ -510,12 +546,13 @@ def run_playblast(
     playblast_cfg: Dict[str, Any],
     camera: str,
     visible_huds: Optional[List[str]] = None,
-    visible_objs: List[str] = list(),
+    visible_objs: List[str] = None,
+    playblast_viewport_cfg: Dict[str, bool] = None,
+    playblast_camera_cfg: Dict[str, Any] = None,
     ffmpeg_config: Dict[str, Dict[str, Any]] = None,
     resolution: List[int] = [1920, 1080],
 ):
     logger.info("Preparing playblast process")
-    set_time_config(start_frame, duration, fps, resolution)
     if not cmds.about(batch=True):
         set_hud_size(20)
     set_hud(visible_huds)
@@ -534,19 +571,27 @@ def run_playblast(
     elif not cmds.about(batch=True):
         cmds.lookThru(camera)
 
-    logger.info("Settings viewport config before playblast.")
-    shown_objs = {k: v for d in return_panel_visible_items() for k, v in d.items()}
+    logger.info("Getting viewport config before playblast.")
+    shown_objs = {
+        k: v
+        for d in return_panel_visible_items(playblast_viewport_cfg)
+        for k, v in d.items()
+    }
     vp2 = {k: v for d in return_config_viewport(**render_config) for k, v in d.items()}
+    old_cam_cfg = return_camera_settings(camera, playblast_camera_cfg.keys())
     old_resolution = [
         cmds.getAttr("defaultResolution.width"),
         cmds.getAttr("defaultResolution.height"),
     ]
     objs_to_show = {k: False for k in shown_objs}
     objs_to_show.update({k: True for k in visible_objs})
-    set_vp2_shown_objects(**objs_to_show)
-    logger.debug(f"Setting viewport config before playblast.")
+
+    logger.info("Settings viewport config before playblast.")
+    set_vp2_shown_objects(objs_to_show, playblast_viewport_cfg)
     set_mh2_render(**render_config)
     set_color_management(color_management)
+    set_time_config(start_frame, duration, fps, resolution)
+    set_camera_settings(camera, playblast_camera_cfg=playblast_camera_cfg)
 
     audio = next((f for f in cmds.ls(type="audio", l=True)), None)
 
@@ -562,8 +607,9 @@ def run_playblast(
 
     logger.debug(f"Setting back viewport config after playblast")
     set_mh2_render(**vp2)
-    set_vp2_shown_objects(**shown_objs)
+    set_vp2_shown_objects(shown_objs, playblast_viewport_cfg)
     set_time_config(start_frame, duration, fps, old_resolution)
+    set_camera_settings(camera, playblast_camera_cfg=old_cam_cfg)
     # take_snapshot(Path(playblast_cfg["filename"]).with_suffix(".jpg"))
     return playblast_cfg["filename"]
 
@@ -574,6 +620,15 @@ def save_maya(output_file: Union[str, Path] = None):
     Path(output_file).parent.mkdir(exist_ok=True, parents=True)
     cmds.file(rename=output_file)
     cmds.file(save=True, type="mayaAscii", op="v=0", force=True)
+
+
+def set_camera_settings(camera: str, playblast_camera_cfg: Dict[str, Any] = None):
+    if playblast_camera_cfg is None:
+        return
+    for key, value in playblast_camera_cfg.items():
+        cmds.setAttr(f"{camera}.{key}", value)
+    cmds.camera(camera, e=True, **playblast_camera_cfg)
+
 
 
 def set_hud(visible_huds: Optional[List[str]] = None):
@@ -599,15 +654,16 @@ def set_time_config(
     start_frame: int,
     duration: int,
     fps: Union[str, int],
-    resolution: List[int],
+    resolution: List[int] = None,
 ):
     cmds.currentUnit(t=fps)
     cmds.playbackOptions(e=True, min=int(start_frame))
     cmds.playbackOptions(e=True, ast=int(start_frame))
     cmds.playbackOptions(e=True, max=str(int(start_frame) + int(duration) - 1))
     cmds.playbackOptions(e=True, aet=str(int(start_frame) + int(duration) - 1))
-    cmds.setAttr("defaultResolution.width", resolution[0], l=False)
-    cmds.setAttr("defaultResolution.height", resolution[1], l=False)
+    if resolution:
+        cmds.setAttr("defaultResolution.width", resolution[0], l=False)
+        cmds.setAttr("defaultResolution.height", resolution[1], l=False)
 
 
 def set_timeline_progress():
@@ -636,13 +692,13 @@ def set_color_management(otn: str = "sRGB"):
     cmds.colorManagementPrefs(e=True, otn=otn)
 
 
-def set_vp2_shown_objects(**kwargs):
+def set_vp2_shown_objects(objs_to_show, playblast_viewport_cfg=None):
     model_panel = return_model_panel()
     if model_panel is None:
         return
     else:
-        for k, v in VIEWPORT_SHOW_OPTIONS.items():
-            value = kwargs.get(k, v)
+        for k, v in playblast_viewport_cfg.items():
+            value = objs_to_show.get(k, v)
             cmds.modelEditor(model_panel, e=True, **{k: value})
 
 

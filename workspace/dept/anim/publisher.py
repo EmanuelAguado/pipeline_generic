@@ -1,10 +1,12 @@
 from pathlib import Path
 from typing import TYPE_CHECKING
 from logging import getLogger
+from re import compile
 
 from maya import cmds  # type: ignore
 
 from pipe_utils import return_highest_file  # type: ignore
+import resolver_utils  # type: ignore
 from publisher.core import Check, Context, Extract  # type: ignore
 from maya_utils import (  # type: ignore
     return_empty_transforms,
@@ -14,13 +16,14 @@ from maya_procedures import (  # type: ignore
     return_asset_parent,
     return_root_nodes_from_reference,
     return_root_transform,
+    return_reference_file_and_ns,
     # return_references_top,
     import_audio,
     export_cam,
 )
 
 if TYPE_CHECKING:
-    import gwaio
+    import gwaio  # type: ignore
 
 logger = getLogger(__name__)
 
@@ -335,17 +338,22 @@ class CheckAssetHierarchy(Check):
             self.root_nodes = return_root_nodes_from_reference(rn)
             logger.debug(f"The current root nodes of the RN are: {self.root_nodes}")
             logger.debug(f"The parent of the assets should be {', '.join(parents)}")
+            error_nodes = list()
             for n in self.root_nodes:
                 logger.debug(f"Working on root node {n} from reference {rn}")
                 if (
                     all(not n.startswith(p) for p in parents)
                     or cmds.listRelatives(n, p=True) is None
                 ):
-                    self.add_error(
-                        "Bad asset hierarchy",
-                        f"{n} parent should be {', '.join(parents)}",
-                        [[n, n]],
+                    error_nodes.append(
+                        [f"{n} parent should be {', '.join(parents)}", n]
                     )
+            if error_nodes:
+                self.add_error(
+                    "Bad asset hierarchy",
+                    "Bad asset hierarchy",
+                    error_nodes,
+                )
 
     def fix_method(self):
         create_hierarchy_from_dict(self.hierarchy_config)
@@ -365,37 +373,71 @@ class CheckAssetHierarchy(Check):
 
 
 class CheckReferencedAssets(Check):
-    # TODO
     name = "Check referenced assets"
-    info = "Checks that all referenced assets are correct."
+    info = "Checks that all referenced assets are correct in the shot."
+    compulsory = False
 
     def process(self, context: Context) -> None:
-        # self.assets = self.context["entity.Shot.assets"] or list()
+        list_references_path = list()
+        assets_bad_path = list
+        for rn, file, ns, nodes in return_reference_file_and_ns():
+            list_references_path.append(Path(file).as_posix())
 
-        # string = self.config["layout_manager.asset_placeholder"]
-        # camera_path = context.get_data("gwaio").plugin.dccs["maya"]["schema"]["camera_file"]
+        version_regex = compile(
+            context.get_data("gwaio").plugin.schema["version_regex"]
+        )
+        assets = context.get_data("gwaio").task.assets.split(",")
+        assets_missing = list()
+        assets_unexpected = list()
+        list_references_path_in_maya = list()
+        for asset_code in assets:
+            ctx = context.get_data("gwaio").plugin.async_find(
+                "Asset", [["code", "is", asset_code]], ["code", "sg_asset_type"]
+            )[0]
+            # asset_type = ctx.get("sg_asset_type")
+            asset_name, asset_variant = asset_code.split("_")
+            ctx.update(
+                {
+                    "root": context.get_data("gwaio").plugin._server_root,
+                    "asset_name": asset_name,
+                    "variant_name": asset_variant,
+                    "task_name": "rigging",
+                }
+            )
+            asset_path = resolver_utils.resolve(
+                context.get_data("gwaio").plugin.dccs["maya"]["schema"][
+                    "asset_path_schema"
+                ],
+                ctx,
+            )
+            # asset_path = f"{context.get_data('gwaio').plugin._server_root}/production/publish/assets/{asset_type}/{asset_name}/{asset_variant}/modelBlocking"
+            asset_file = return_highest_file(version_regex, asset_path, ".ma")
+            if asset_file:
+                list_references_path_in_maya.append(Path(asset_file).as_posix())
+            if (
+                not asset_file
+                or Path(asset_file).as_posix() not in list_references_path
+            ):
+                logger.warning(f"Asset {asset_code} not found...")
+                print(f"Asset {asset_code} not found...")
+                assets_missing.append([asset_code, asset_code])
 
-        # asset_files = set(
-        #     Path(f) for f in yield_asset_paths(string, self.assets, self.config)
-        # )
+        for file in list_references_path:
+            if Path(file).as_posix() not in list_references_path_in_maya:
+                assets_unexpected.append([Path(file).stem, Path(file).stem])
 
-        # maya_dependencies = (
-        #     cmds.referenceQuery(r, f=True, wcn=True) for r in return_references_top()
-        # )
-        # refs = {Path(f) for f in maya_dependencies}
-        # self.missing = missing = [fspath(f) for f in asset_files - refs]
-
-        # cam_file = Path(camera_path).name
-        # self.bad_refs = [
-        #     fspath(f) for f in refs - asset_files if cam_file not in str(f)
-        # ]
-        # if missing:
-        #     self.add_error(
-        #                 "Missing references",
-        #                 f"{missing} missing reference",
-        #                 [[missing,missing]],
-        #             )
-        logger.debug("Check not implemented yet")
+        if assets_missing:
+            self.add_error(
+                "Missing references",
+                f"Missing reference",
+                assets_missing,
+            )
+        if assets_unexpected:
+            self.add_error(
+                "Unexpected references or bad path",
+                "Unexpected references or bad path",
+                assets_unexpected,
+            )
 
     def fix_method(self):
         # ns_string = self.config["maya.config.namespace_schema"]
@@ -420,9 +462,21 @@ class ExtractCamera(Extract):
     info = "Extracts the camera from the scene."
 
     def process(self, context: Context) -> None:
-        maya_publish_path =context.get_data("gwaio").plugin.work_to_publish(context.get_data("task"))[1]
+        maya_publish_path = context.get_data("gwaio").plugin.work_to_publish(
+            context.get_data("task")
+        )[1]
         cam_name = "|cam|cam_master:CAM_MASTER|cam_master:cam_master"
+        cam_out_name = resolver_utils.resolve(
+            context.get_data("gwaio").plugin.dccs["maya"]["schema"][
+                "camera_name_schema"
+            ],
+            context.get_data("gwaio").task.__dict__,
+        )
+        cam_output_file = Path(f"{maya_publish_path}/dmp_camera.abc")
+
         export_cam(
-            cam_name = cam_name,
-            output_file=Path(f"{maya_publish_path}/dmp_camera.abc"),
+            cam_input_name=cam_name,
+            cam_output_name=cam_out_name,
+            output_file=cam_output_file,
+            cam_grp="bcam",
         )
