@@ -176,6 +176,47 @@ def export_cam(
 
         cmds.delete(cmds.listRelatives(cam_transform, type="constraint"))
 
+    def export_camera_usd(node, file_path):
+        start_frame = cmds.playbackOptions(q=True, min=True)
+        end_frame = cmds.playbackOptions(q=True, max=True)
+        format = "usda"  # usdc
+        options = ";".join(
+            [
+                "",
+                "exportUVs=0",
+                "exportSkels=auto",
+                "exportSkin=none",
+                "exportBlendShapes=0",
+                "exportColorSets=0",
+                "defaultMeshScheme=none",
+                f"defaultUSDFormat={format}",
+                "animation=1",
+                "eulerFilter=1",
+                "staticSingleSample=1",
+                f"startTime={start_frame}",
+                f"endTime={end_frame}",
+                "frameStride=1",
+                "frameSample=0.0",
+                "parentScope=",
+                "exportDisplayColor=0",
+                "shadingMode=none",
+                "exportInstances=1",
+                "exportVisibility=1",
+                "mergeTransformAndShape=1",
+                "stripNamespaces=0",
+            ]
+        )
+        cmds.select(clear=True)
+        cmds.select(node, r=True)
+        cmds.file(
+            fspath(file_path),
+            force=True,
+            typ="USD Export",
+            pr=True,
+            es=True,
+            options=options,
+        )
+
     def export_camera_abc(node, file_path):
         start_frame = cmds.playbackOptions(q=True, min=True)
         end_frame = cmds.playbackOptions(q=True, max=True)
@@ -185,7 +226,7 @@ def export_cam(
             "-worldSpace "
             "-dataFormat ogawa "
             f"-root |{cam_grp} "
-            f"-file {file_path} "
+            f"-file {file_path}"
             '";'
         )
         print("\tAlembic Export command: {}\n".format(cmd))
@@ -195,6 +236,8 @@ def export_cam(
         format = Path(file_path).suffix
         if format == ".abc":
             export_camera_abc(cam_grp, file_path)
+        elif format == ".usd":
+            export_camera_usd(cam_grp, file_path)
 
     def cleanup(cam_grp):
         if cmds.objExists(cam_grp):
@@ -264,10 +307,35 @@ def import_cam(cam_file: str, config: Dict[str, str] = None):
         set_renderable_camera(cam_transform[0])
         return cam_transform
 
+    def import_camera_usd(cam_file: str):
+        if not cmds.pluginInfo("mayaUsdPlugin", q=True, loaded=True):
+            cmds.loadPlugin("mayaUsdPlugin")
+        before = set(cmds.ls(type="camera", long=True))
+        options = ";".join([
+            "readAnimData=1",
+        ])
+        cmds.file(
+            fspath(cam_file),
+            i=True,
+            type="USD Import",
+            options=options,
+            preserveReferences=True,
+        )
+        after = set(cmds.ls(type="camera", long=True))
+        new_shapes = list(after - before)
+        cam_transforms = [
+            cmds.listRelatives(s, parent=True, fullPath=True)[0]
+            for s in new_shapes
+        ]
+        set_renderable_camera(cam_transforms[0])
+        return cam_transforms
+
     cam = None
     format = Path(cam_file).suffix
     if format == ".abc":
         cam = import_camera_abc(cam_file)
+    elif format == ".usd":
+        cam = import_camera_usd(cam_file)
     elif format == ".ma":
         cam = import_camera_reference(cam_file, config)
     if cam is not None:
@@ -309,10 +377,14 @@ def is_correct_task(*task_name):
         def check(*args, **kwargs):
             current_task = args[0].task.name
             if current_task not in task_name:
-                logger.error(f"Expected task '{task_name}' but current task is '{current_task}'")
+                logger.error(
+                    f"Expected task '{task_name}' but current task is '{current_task}'"
+                )
                 return
             return f(*args, **kwargs)
+
         return check
+
     return decorator
 
 
@@ -329,7 +401,9 @@ def reference_file(
     file: Union[str, Path], namespace: Union[str, None], parent: Union[str, None] = None
 ):
     try:
-        logger.debug(f"referencing files: {file} with ns: {namespace} and parent: {parent}")
+        logger.debug(
+            f"referencing files: {file} with ns: {namespace} and parent: {parent}"
+        )
         namespace = namespace or Path(file).stem
         ref = cmds.file(fspath(file), r=True, namespace=namespace, force=True)
         nodes = cmds.referenceQuery(ref, nodes=True, dp=True)
@@ -341,7 +415,9 @@ def reference_file(
         cmds.lockNode(new_ref_node, l=True)
         if parent is not None:
             cmds.parent(nodes[0], parent)
-        logger.debug(f"Referenced file successfully: {file} as {new_ref_node} with namespace: {namespace}")
+        logger.debug(
+            f"Referenced file successfully: {file} as {new_ref_node} with namespace: {namespace}"
+        )
         return ref, nodes
     except Exception as e:
         logger.warning(str(e))
@@ -440,7 +516,6 @@ def return_camera_settings(camera: str, settings: Optional[List[str]] = None):
     return cam_cfg
 
 
-
 def return_config_viewport(**kwargs):
     for k in kwargs.keys():
         yield {k: cmds.getAttr(f"hardwareRenderingGlobals.{k}")}
@@ -479,7 +554,7 @@ def return_references_top():
             return rn
 
 
-def return_reference_file_and_ns(top_refs=False,rn=None):
+def return_reference_file_and_ns(top_refs=False, rn=None):
     l = cmds.ls(references=True, l=True)
     if top_refs:
         l = [r for r in deepcopy(l) if cmds.referenceQuery(r, rfn=True, tr=True) == r]
@@ -628,7 +703,6 @@ def set_camera_settings(camera: str, playblast_camera_cfg: Dict[str, Any] = None
     for key, value in playblast_camera_cfg.items():
         cmds.setAttr(f"{camera}.{key}", value)
     cmds.camera(camera, e=True, **playblast_camera_cfg)
-
 
 
 def set_hud(visible_huds: Optional[List[str]] = None):

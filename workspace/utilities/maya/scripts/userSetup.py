@@ -6,9 +6,9 @@ if TYPE_CHECKING:
 
 
 def init_generic():
-    print("#######################################################")
-    print("############## Project: Generic HIA pipeline ##############")
-    print("#######################################################")
+    print("[gwaio generic project] #######################################################")
+    print("[gwaio generic project] ############## Project: Generic HIA pipeline ##########")
+    print("[gwaio generic project] #######################################################")
     import os
     import inspect
     from datetime import datetime
@@ -20,9 +20,10 @@ def init_generic():
     import maya_publisher  # type: ignore
     import maya_procedures  # type: ignore
     import maya_utils  # type: ignore
+    import maya_tools  # type: ignore
 
     starting_date = datetime.now()
-    print("[gwaio] Importing tools...")
+    print("[gwaio generic project] Importing tools...")
     base_path = Path(
         os.path.abspath(inspect.getfile(inspect.currentframe()))
     ).parent.parent
@@ -275,6 +276,21 @@ def init_generic():
         ],
     }
 
+    def on_layout_from_shot_generator(menu_cams):
+        from pathlib import Path
+        from re import compile
+        from pipe_utils import return_highest_file  # type: ignore
+
+        menu_cams.clear()
+        version_regex = compile(gwaio.plugin.schema["version_regex"])
+        folder_lyt_path = gwaio.plugin.work_to_publish(gwaio.task.serialize())[1]
+        for lyt_w_folder, shot_name in list([f,f.stem] for f in Path(folder_lyt_path).parent.parent.glob("*")):
+            lyt_p_folder = return_highest_file(version_regex,lyt_w_folder/"layout", ".ma")
+            if not lyt_p_folder:
+                continue
+            print(f"Adding shot {shot_name} to layout creation menu")
+            menu_cams.addAction(shot_name, partial(lyt_creation_procedure, gwaio, lyt_p_folder.as_posix()))
+
     # añadir los check desde la libreria de publisher y no la de utilities.maya
     def add_gwaio_menu():
         """You need to wrap the method around a partial call"""
@@ -345,8 +361,12 @@ def init_generic():
                 },
                 "Shots": {
                     "Layout": {
-                        "1.- Create base": partial(lyt_creation_procedure, gwaio),
-                        "2.- Test Bake camera": {
+                        "1.- Create base": {
+                            "Master key": partial(lyt_creation_procedure, gwaio),
+                            "From shots": ["auto_menu", on_layout_from_shot_generator],
+                        },
+                        "2.- Asset management": partial(maya_tools.HiAssetManager().show),
+                        "3.- Test Bake camera": {
                             "Export bake camera": partial(
                                 lyt_export_camera_procedure, gwaio
                             ),
@@ -357,13 +377,13 @@ def init_generic():
                                 lyt_clean_camera_procedure, gwaio
                             ),
                         },
-                        "3.- Create preview": {
+                        "4.- Create preview": {
                             "720p": partial(lyt_preview_procedure, gwaio, [1280, 720]),
                             "1080p": partial(
                                 lyt_preview_procedure, gwaio, [1920, 1080]
                             ),
                         },
-                        "4.- Publish": partial(
+                        "5.- Publish": partial(
                             maya_publisher.main, gwaio, publisher_builder_data["layout"]
                         ),
                     },

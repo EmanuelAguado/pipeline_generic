@@ -19,6 +19,8 @@ from maya_procedures import (  # type: ignore
     set_color_management,
     import_image_plane,
     reference_files,
+    reference_update,
+    return_reference_file_and_ns,
     return_file,
     run_playblast,
     set_mh2_render,
@@ -32,7 +34,7 @@ if TYPE_CHECKING:
 logger = getLogger(__name__)
 
 @is_correct_task("layout")
-def lyt_creation_procedure(gwaio):
+def lyt_creation_procedure(gwaio, shot_file=None):
     logger.info("Layout creation procedure started")
     output_file = sub(
         gwaio.plugin.schema["version_regex"], "001", cmds.file(q=True, sn=True)
@@ -77,17 +79,17 @@ def lyt_creation_procedure(gwaio):
         ctx = gwaio.plugin.async_find(
             "Asset", [["code", "is", asset_code]], ["code", "sg_asset_type"]
         )[0]
-        # asset_type = ctx.get("sg_asset_type")
         asset_name, asset_variant = asset_code.split("_")
+        task_name = "modelBlocking" if ctx.get("sg_asset_type") != "en" else "blockingDressing"
+        
         ctx.update(
             {
                 "root": gwaio.plugin._server_root,
                 "asset_name": asset_name,
                 "variant_name": asset_variant,
-                "task_name": "modelBlocking",
+                "task_name": task_name,
             }
         )
-        # asset_path = f"{gwaio.plugin._server_root}/production/publish/assets/{asset_type}/{asset_name}/{asset_variant}/modelBlocking"
         asset_path = resolver_utils.resolve(
             gwaio.plugin.dccs["maya"]["schema"]["asset_path_schema"],
             ctx,
@@ -106,7 +108,7 @@ def lyt_creation_procedure(gwaio):
         logger.info(f"Asset will be {asset_file} with namespace {asset_ns}")
 
     logger.info("Find attributes project")
-    input_file = None
+    input_file = shot_file
     duration = gwaio.task.cut_duration
     start_frame = gwaio.plugin.attributes["start_frame"]
     fps = gwaio.plugin.dccs["maya"]["attributes"]["fps"]
@@ -119,17 +121,43 @@ def lyt_creation_procedure(gwaio):
     logger.info("Generate layout file")
     logger.debug(f"Import template file: {input_file}")
     import_file(input_file)
+    if input_file:
+        logger.info(f"Template file imported: {input_file}")
+        cmds.delete(cmds.ls(type="audio") or [])
     logger.debug(f"Setting time config: {start_frame}, {duration}, {fps}, {resolution}")
     set_time_config(start_frame, duration, fps, resolution)
     logger.debug(f"Importing audio file: {audio_file} | node name: {audio_node_name}")
     import_audio(audio_file, audio_node_name)
     logger.debug(f"Creating hierarchy: {hierarchy_config}")
     create_hierarchy_from_dict(hierarchy_config)
-    logger.debug("reference files:")
-    reference_files(assets_data, hierarchy_config)
-    cam = import_cam(camera_file, hierarchy_config)
-    if image_plane:
-        import_image_plane(cam, image_plane)
+    if input_file:
+        new_assets_data = list()
+        existing_asset_path = [Path(a[1]).as_posix() for a in return_reference_file_and_ns(False)]
+        for asset_file, asset_ns in assets_data:
+            old_path = Path(asset_file).parent
+            logger.info(f"Updating asset {asset_ns} from {old_path} to {asset_file}")
+            reference_update(old_path, asset_file)
+            logger.info(f"Asset {asset_ns} updated successfully")
+
+        for asset_file, asset_ns in assets_data:
+            if not Path(asset_file).as_posix() in existing_asset_path:
+                new_assets_data.append((asset_file, asset_ns))
+        reference_files(new_assets_data, hierarchy_config)
+
+        for asset_file in existing_asset_path:
+            if "cam_master" in Path(asset_file).stem:
+                continue
+            if not Path(asset_file).as_posix() in [Path(a[0]).as_posix() for a in assets_data]:
+                logger.info(f"Removing asset reference {asset_file} as it's not in the current shot")
+                cmds.file(asset_file, removeReference=True)
+                logger.info(f"Asset reference {asset_file} removed successfully")
+
+    else:
+        logger.debug("reference files:")
+        reference_files(assets_data, hierarchy_config)
+        cam = import_cam(camera_file, hierarchy_config)
+        if image_plane:
+            import_image_plane(cam, image_plane)
     set_mh2_render(**render_config)
     set_color_management(color_management)
     save_maya(output_file)
@@ -195,7 +223,7 @@ def lyt_export_camera_procedure(gwaio):
     cam_out_name = resolver_utils.resolve(
         gwaio.plugin.dccs["maya"]["schema"]["camera_name_schema"], gwaio.task.__dict__
     )
-    cam_output_file = Path(f"{maya_publish_path}/dmp_camera.abc")
+    cam_output_file = Path(f"{maya_publish_path}/dmp_camera.usd")
     export_cam(
         cam_input_name=cam_name,
         cam_output_name=cam_out_name,
@@ -208,7 +236,7 @@ def lyt_export_camera_procedure(gwaio):
 def lyt_import_camera_procedure(gwaio):
     logger.info("Layout import camera procedure started")
     maya_publish_path = gwaio.plugin.work_to_publish(gwaio.task.serialize())[1]
-    cam_output_file = Path(f"{maya_publish_path}/dmp_camera.abc")
+    cam_output_file = Path(f"{maya_publish_path}/dmp_camera.usd")
     import_cam(cam_output_file)
 
 
