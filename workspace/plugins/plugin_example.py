@@ -12,7 +12,7 @@ class DemoProjectPlugin(Maya3DPlugin):
     SHOTGRID_URL = "https://mondotv.shotgunstudio.com"
     PROJECT_UUID = "c5969a17-c0a1-44bc-88a2-cb3537e5d1d4"
     
-    title = "Demo Project"
+    title = "Demo Project Generic"
     project_shortname = "dmp"
     env_name = "DEMOPROJECT"
     default_server_root = "C:/projects/plugin_example"
