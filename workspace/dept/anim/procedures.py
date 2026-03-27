@@ -1,3 +1,4 @@
+import fnmatch
 from logging import getLogger
 from pathlib import Path
 from re import compile, sub
@@ -13,10 +14,12 @@ import resolver_utils  # type: ignore
 from maya_procedures import (  # type: ignore
     import_audio,
     import_cam,
+    export_cache,
     is_correct_task,
     reference_update,
     return_file,
     return_reference_file_and_ns,
+    return_root_nodes_from_reference,
     run_playblast,
     save_maya,
 )
@@ -27,7 +30,7 @@ if TYPE_CHECKING:
 logger = getLogger(__name__)
 
 
-@is_correct_task("blocking", "refine", "fix")
+@is_correct_task("blocking", "refine", "fix", "bake")
 def anim_creation_procedure(gwaio):
     logger.info("First version creation started")
     output_file = sub(
@@ -184,3 +187,115 @@ def anim_preview_procedure(gwaio, resolution: List[int] = [1920, 1080]):
         )
     except RuntimeError as e:
         print("Failed to create playblast due to {}".format(str(e)))
+
+@is_correct_task("bake")
+def bak_export_caches_procedure(gwaio):
+    def return_cache_path(node: str, cache_type: str) -> str:
+        _, asset_type, *_, node_name = node.split("|")
+        name = node_name.split(":")[1]
+        ma_path = Path(cmds.file(q=True, sn=True))
+        output_file = Path(
+            ma_path.parent,
+            f"dmp_{asset_type}_{name}.{cache_type}",
+        ).as_posix()
+        return output_file
+
+    logger.info("Bake export caches procedure started")
+
+    seen = list()
+    result = list()
+    for rn in cmds.ls(references=True):
+        if not cmds.referenceQuery(rn, il=True):
+            logger.debug(f"The reference {rn} is not load")
+            continue
+        file_path = cmds.referenceQuery(rn, f=True, wcn=True)
+        if not "/rigging/" in file_path:
+            continue
+        roots = return_root_nodes_from_reference(rn)
+        root = roots[0] if roots else None
+        if root in seen:
+            continue
+        seen.append(root)
+        output_file = return_cache_path(root, "abc")
+        result += export_cache(root, output_file=output_file)
+
+@is_correct_task("bake")
+def bak_import_caches_procedure(gwaio):
+    def return_cache_path(node: str, cache_type: str) -> str:
+        _, asset_type, *_, node_name = node.split("|")
+        name = node_name.split(":")[1]
+        ma_path = Path(cmds.file(q=True, sn=True))
+        output_file = Path(
+            ma_path.parent,
+            f"dmp_{asset_type}_{name}.{cache_type}",
+        ).as_posix()
+        return output_file
+
+    logger.info("Bake import caches procedure started")
+
+    seen = list()
+    result = list()
+    for rn in cmds.ls(references=True):
+        if not cmds.referenceQuery(rn, il=True):
+            logger.debug(f"The reference {rn} is not load")
+            continue
+        file_path = cmds.referenceQuery(rn, f=True, wcn=True)
+        if not "/rigging/" in file_path:
+            continue
+        roots = return_root_nodes_from_reference(rn)
+        root = roots[0] if roots else None
+        if root in seen:
+            continue
+        seen.append(root)
+        output_file = return_cache_path(root, "abc")
+        result += import_cache(root, output_file=output_file)
+
+def import_ref_cache_from_selection(display_dialog: bool = False):
+    logger.info("Importing caches")
+    seen = list()
+    result = list()
+    for node in cmds.ls(sl=True, l=True):
+        if not cmds.referenceQuery(node, inr=True):
+            logger.debug(f"The node {node} doesn't belong to a reference")
+            continue
+        roots = return_root_nodes_from_reference(node)
+        root = roots[0] if roots else None
+        if root in seen:
+            continue
+
+        rn = cmds.referenceQuery(node, rfn=True)
+        old_file = cmds.referenceQuery(rn, f=True, wcn=True)
+        old_nodes = cmds.referenceQuery(rn, n=True, dp=True)
+
+        if not "/rig/" in old_file:
+            continue
+        # logger.info(f"Swapping reference {old_file}")
+        new_path = Path(old_file).parent.as_posix().replace("rig", "shad")
+        asset_file = return_highest_file(recomp("(?<=u|v)[0-9]{4}"), new_path, ".ma")
+        if asset_file is None:
+            logger.warning(
+                f"Failed to find shading file for reference {rn}, {old_file}"
+            )
+            continue
+        # TODO: check if there is cache files for the shading file, if not log warning        
+        rn_version = rn.split("_RN")[-1]
+        asset_ns = Path(asset_file).stem + f"_rn{rn_version}"
+        asset_ns = validate_namespace(asset_ns)
+        root_rig = cmds.listRelatives(old_nodes[0], f=True)[0]
+        ref_node = replace_reference(asset_file.as_posix(), rn, asset_ns)
+        root_shd = return_root_nodes_from_reference(
+            cmds.referenceQuery(ref_node, n=True)[0]
+        )[0]
+
+        # logger.info(f"Swap reference success {root_rig} -> {root_shd}")
+        seen.append(root)
+
+        result += mago_import_caches(root_shd, root_rig)
+
+    if result and display_dialog:
+        QMessageBox.information(
+            None,
+            "Processed files" + " " * 239,
+            "List of processed files:\n" + "\n".join(result),
+        )  # QMessageBox no ajusta su tamaño al texto ni hay forma de forzarlo
+    return result

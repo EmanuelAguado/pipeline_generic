@@ -40,7 +40,7 @@ def init_generic():
         lyt_import_camera_procedure,
         lyt_clean_camera_procedure,
     )
-    from dept.anim.procedures import anim_creation_procedure, anim_preview_procedure
+    from dept.anim.procedures import anim_creation_procedure, anim_preview_procedure, bak_export_caches_procedure
     from dept.layout import publisher as lyt_publisher
     from dept.anim import publisher as anim_publisher
 
@@ -430,10 +430,20 @@ def init_generic():
                         ),
                     },
                     "Bake": {
-                        "1.- todo": partial(print, "todo: generate"),
-                        "2.- todo": partial(print, "todo: generate"),
+                        "1.- Create base": partial(anim_creation_procedure, gwaio),
+                        "2.- Export caches": {
+                            "all": partial(bak_export_caches_procedure, gwaio),
+                        },
+                        "3.- Rig to Shading": {
+                            "all": partial(bak_export_caches_procedure, gwaio),
+                        },
+                        "4.- Import cache": {
+                            "all": partial(bak_export_caches_procedure, gwaio),
+                        },
                         "3.- Publish": partial(
-                            maya_publisher.main, gwaio, publisher_builder_data["bake"]
+                            maya_publisher.main,
+                            gwaio,
+                            publisher_builder_data["bake"],
                         ),
                     },
                 },

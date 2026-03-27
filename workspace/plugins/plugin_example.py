@@ -23,3 +23,20 @@ class DemoProjectPlugin(Maya3DPlugin):
         self.WORKSPACE_PATH = Path(__file__).resolve().parents[1]
         self.CUSTOM_MAYA_TOOLS = Path(f"{self.WORKSPACE_PATH}/utilities/maya")
         self.CUSTOM_NUKE_TOOLS = Path(f"{self.WORKSPACE_PATH}/utilities/nuke")
+        self._dict_previous_tasks = {
+            "line": {"task": "sketch", "step": "ConceptArtStep"},
+            "color": {"task": "line", "step": "ConceptArtStep"},
+            "model": {"task": "modelblocking", "step": "ModelingStep"},
+            "uvs": {"task": "model", "step": "ModelingStep"},
+            "shading": {"task": "uvs", "step": "ModelingStep"},
+            "fur": {"task": "shading", "step": "LookDevStep"},
+            "blendShapes": {"task": "model", "step": "ModelingStep"},
+            "rigging": {"task": "model", "step": "ModelingStep"},
+            "animLib": {"task": "rigging", "step": "RiggingStep"},
+            "blocking": {"task": "layout", "step": "LayoutStep"},
+            "refine": {"task": "blocking", "step": "AnimationStep"},
+            "fix": {"task": "refine", "step": "AnimationStep"},
+            "bake": [{"task": "fix", "step": "AnimationStep"}, {"task": "refine", "step": "AnimationStep"}],
+            "fxclean": {"task": "fxrough", "step": "FxStep"},
+            "lighting": {"task": "prelight", "step": "LightingStep"},
+        }

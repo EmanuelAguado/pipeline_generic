@@ -10,7 +10,7 @@ from PySide6.QtWidgets import QMessageBox  # type: ignore
 from maya import cmds  # type: ignore
 
 from gwaio.utilities.pipe_utils import return_highest_file  # type: ignore
-import gwaio.utilities.resolver_utils  # type: ignore
+from gwaio.utilities import resolver_utils  # type: ignore
 from maya_procedures import (  # type: ignore
     import_file,
     import_audio,
