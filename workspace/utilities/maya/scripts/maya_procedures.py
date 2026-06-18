@@ -109,6 +109,40 @@ def create_groups_and_controller(
     return obj, model_grp, rig_grp, controller
 
 
+def export_cache(node, output_file=None, cache_type="abc"):
+    def export_abc(
+        list_nodes: list[str],
+        output_path: str,
+        config: str = "-uvWrite -worldSpace -writeVisibility -writeUVSets",
+    ):
+        if not cmds.pluginInfo("AbcExport", q=True, l=True):
+            cmds.loadPlugin("AbcExport.mll")
+        logger.debug(f"Export ABC: {output_path}")
+        output_path = Path(output_path)
+        # cmds.setAttr(f"{output_path.stem}:controlNode.targetSmoothLevel", 2)
+
+        try:
+            output_path.parent.mkdir(exist_ok=True)
+            start = cmds.playbackOptions(min=True, q=True)
+            end = cmds.playbackOptions(max=True, q=True)
+            string_nodes = "-root " + " -root ".join(list_nodes)
+            job = f"-frameRange {start} {end} {config} {string_nodes} -file {fspath(output_path)}"
+            logger.debug(f"The command for exporting ABC is: {job}")
+            cmds.AbcExport(jobArg=job)
+            logger.debug(f"ABC exported successfully: {fspath(output_path)}")
+            return True
+        except Exception as e:
+            logger.error(f"Failed export ABC: {str(e)}")
+            
+    logger.info(f"Getting meshes {node}")
+    list_geo = return_geos_to_cache(node, include=["model_grp"])
+    if list_geo:
+        logger.info(f"Exporting {cache_type.upper()}: {output_file}")
+        r = export_abc(list_geo, output_file)
+        return [output_file]
+    return []
+
+
 def export_cam(
     cam_input_name: str,
     cam_output_name: str,
@@ -311,9 +345,11 @@ def import_cam(cam_file: str, config: Dict[str, str] = None):
         if not cmds.pluginInfo("mayaUsdPlugin", q=True, loaded=True):
             cmds.loadPlugin("mayaUsdPlugin")
         before = set(cmds.ls(type="camera", long=True))
-        options = ";".join([
-            "readAnimData=1",
-        ])
+        options = ";".join(
+            [
+                "readAnimData=1",
+            ]
+        )
         cmds.file(
             fspath(cam_file),
             i=True,
@@ -324,8 +360,7 @@ def import_cam(cam_file: str, config: Dict[str, str] = None):
         after = set(cmds.ls(type="camera", long=True))
         new_shapes = list(after - before)
         cam_transforms = [
-            cmds.listRelatives(s, parent=True, fullPath=True)[0]
-            for s in new_shapes
+            cmds.listRelatives(s, parent=True, fullPath=True)[0] for s in new_shapes
         ]
         set_renderable_camera(cam_transforms[0])
         return cam_transforms
@@ -519,6 +554,37 @@ def return_camera_settings(camera: str, settings: Optional[List[str]] = None):
 def return_config_viewport(**kwargs):
     for k in kwargs.keys():
         yield {k: cmds.getAttr(f"hardwareRenderingGlobals.{k}")}
+
+
+def return_geos_to_cache(
+    node: str,
+    include: list[str] = None,
+    exclude: list[str] = None,
+    shape: bool = False,
+):
+    list_nodes = list()
+    for node_name in cmds.listRelatives(node, ad=True, type="transform", f=True):
+        if not cmds.listRelatives(node_name, shapes=True, type="mesh", f=True):
+            continue
+        if not all(exc not in node_name for exc in exclude or []):
+            continue
+        if include != None and not all(inc in node_name for inc in include or []):
+            continue
+        if shape:
+            shapes = cmds.listRelatives(node_name, shapes=True)
+            shape_without_intermediate = None
+            for s in shapes:
+                if cmds.getAttr(f"{s}.intermediateObject") == False:
+                    shape_without_intermediate = s
+                    break
+            if shape_without_intermediate:
+                list_nodes.append(shape_without_intermediate)
+            else:
+                list_nodes.append(node_name)
+        else:
+            list_nodes.append(node_name)
+    logger.debug(f"geos to cache: {list_nodes}")
+    return list_nodes
 
 
 def return_model_panel_with_cam(cam: str):

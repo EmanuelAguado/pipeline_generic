@@ -3,12 +3,14 @@ from pathlib import Path
 from re import compile, sub
 from typing import TYPE_CHECKING, List
 from os import fspath
+if TYPE_CHECKING:
+    import gwaio  # type: ignore
 
 from PySide6.QtWidgets import QMessageBox  # type: ignore
 from maya import cmds  # type: ignore
 
-from pipe_utils import return_highest_file  # type: ignore
-import resolver_utils  # type: ignore
+from gwaio.utilities.pipe_utils import return_highest_file  # type: ignore
+from gwaio.utilities import resolver_utils  # type: ignore
 from maya_procedures import (  # type: ignore
     import_file,
     import_audio,
@@ -28,8 +30,6 @@ from maya_procedures import (  # type: ignore
     save_maya,
 )
 
-if TYPE_CHECKING:
-    import gwaio  # type: ignore
 
 logger = getLogger(__name__)
 
